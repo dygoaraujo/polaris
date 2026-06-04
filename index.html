@@ -250,7 +250,7 @@ td .sub{font-size:11px;color:var(--txt-faint);margin-top:2px}
 .pills{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
 .pill{display:inline-flex;align-items:center;gap:7px;background:var(--panel-2);border:1px solid var(--line-soft);border-radius:20px;padding:5px 6px 5px 12px;font-size:13px;font-weight:600}
 .pill button{border:0;background:transparent;color:var(--txt-faint);font-size:13px;line-height:1}.pill button:hover{color:var(--red)}
-.pill.dragging{opacity:.35;border-style:dashed}.pill .drag-h{cursor:grab;color:var(--txt-faint);font-size:14px;padding:0 3px 0 0;user-select:none}.pill .drag-h:hover{color:var(--txt-dim)}.pill-lbl{cursor:pointer}.pill-lbl:hover{color:var(--accent);text-decoration:underline dotted}
+.pill{cursor:grab}.pill.dragging{opacity:.35;border-style:dashed;border-color:var(--accent)}.pill-lbl{cursor:pointer}.pill-lbl:hover{color:var(--accent);text-decoration:underline dotted}
 .addline{display:flex;gap:8px}.addline input{flex:1;background:var(--panel-2);border:1px solid var(--line-soft);border-radius:9px;color:var(--txt);padding:8px 11px;font-size:13.5px}.addline input:focus{outline:none;border-color:var(--line)}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--panel-2);border:1px solid var(--line);color:var(--txt);padding:11px 18px;border-radius:11px;font-size:14px;opacity:0;transition:.25s;z-index:70;box-shadow:0 12px 30px -10px #000}.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 @media(max-width:1000px){.board{grid-template-columns:1fr 1fr}}
@@ -772,10 +772,10 @@ function renderIdeas(){document.getElementById('ideaGrid').innerHTML=`<div class
   const add=document.getElementById('ideaAdd');if(add)add.onclick=async()=>{const t=document.getElementById('ideaT').value.trim(),b=document.getElementById('ideaB').value.trim();if(!t&&!b){toast('Write something first');return;}ideas.unshift({id:uid(),title:t,body:b,createdAt:new Date().toISOString()});await saveIdeas();toast('Idea saved 💡');};}
 
 /* SETTINGS */
-function pillHTML(field,i,v){return `<span class=”pill” draggable=”true” data-pfield=”${field}” data-pidx=”${i}”><span class=”drag-h” title=”Drag to reorder”>&#8942;&#8942;</span><span class=”pill-lbl” data-pedit=”${field}:${i}” title=”Click to rename”>${esc(v)}</span><button data-rem=”${field}:${i}” title=”Remove”>✕</button></span>`;}
+function pillHTML(field,i,v){return `<span class=”pill” draggable=”true” data-pfield=”${field}” data-pidx=”${i}” title=”Drag to reorder · click name to rename”><span class=”pill-lbl” data-pedit=”${field}:${i}”>${esc(v)}</span><button data-rem=”${field}:${i}” title=”Remove”>✕</button></span>`;}
 
 function renderSettings(){
-  const listPanel=(title,desc,field)=>`<div class=”set-panel”><h4>${title}</h4><div class=”sd”>${desc} <span style=”color:var(--txt-faint);font-size:11.5px”>— drag to reorder · click name to rename</span></div><div class=”pills” id=”pills-${field}”>${(settings[field]||[]).map((v,i)=>pillHTML(field,i,v)).join('')||'<span style=”color:var(--txt-faint);font-size:13px”>None yet.</span>'}</div><div class=”addline”><input id=”add-${field}” placeholder=”Add new…”><button class=”btn sm primary” data-add=”${field}”>Add</button></div></div>`;
+  const listPanel=(title,desc,field)=>`<div class=”set-panel”><h4>${title}</h4><div class=”sd”>${desc}</div><div class=”pills” id=”pills-${field}”>${(settings[field]||[]).map((v,i)=>pillHTML(field,i,v)).join('')||'<span style=”color:var(--txt-faint);font-size:13px”>None yet.</span>'}</div><div class=”addline”><input id=”add-${field}” placeholder=”Add new…”><button class=”btn sm primary” data-add=”${field}”>Add</button></div></div>`;
   document.getElementById('settingsBody').innerHTML=`<div class=”set-grid”>
       <div class=”set-panel”><h4>Your name</h4><div class=”sd”>Used in the greeting on Today.</div><div class=”addline”><input id=”set-name” value=”${esc(settings.name||'')}” placeholder=”Your name”><button class=”btn sm primary” id=”saveName”>Save</button></div></div>
       ${listPanel('Activity types','e.g. Project document, Mechanical test, Supplier dealing.','types')}
