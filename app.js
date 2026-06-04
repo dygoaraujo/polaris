@@ -242,7 +242,7 @@ function addRowHTML() {
     <td><button class="ar-add" id="ar-add" title="Add (Enter)">＋</button></td>
     <td><input id="ar-title" placeholder="New activity… (English)"></td>
     <td><select id="ar-type">${selOpts(typeOptions(), '')}</select></td>
-    <td><input id="ar-prod" placeholder="Product" list="prodlist2"><datalist id="prodlist2">${productOptions().map(p => `<option value="${esc(p)}">`).join('')}</datalist></td>
+    <td><select id="ar-prod">${selOpts(productOptions(), '')}</select></td>
     <td><select id="ar-sector">${selOpts(sectorOptions(), '')}</select></td>
     <td><span class="muted">today</span></td>
     <td><input id="ar-due" type="date"></td>
@@ -326,7 +326,7 @@ function openModal(task) {
       <div id="tutorBox"></div><div style="display:flex;justify-content:flex-end"><button class="btn sm" id="checkEn">🌐 Check my English</button></div>
       <div class="row3">
         <div class="field"><label>Type</label><select id="f-type">${selOpts(typeOptions(), t.type)}</select></div>
-        <div class="field"><label>Product</label><input id="f-prod" value="${esc(t.product)}" placeholder="e.g. P-204 Pump" list="prodlist"><datalist id="prodlist">${productOptions().map(p => `<option value="${esc(p)}">`).join('')}</datalist></div>
+        <div class="field"><label>Product</label><select id="f-prod">${selOpts(productOptions(), t.product)}</select></div>
         <div class="field"><label>Sector</label><select id="f-sector">${selOpts(sectorOptions(), t.sector)}</select></div>
       </div>
       <div class="row3">
@@ -443,11 +443,22 @@ function renderMetrics() {
   const mt = tasks.filter(metricIn);
   const total = mt.length, done = mt.filter(t => t.status === 'done').length, rate = total ? Math.round(done / total * 100) : 0;
   const hours = mt.reduce((s, t) => s + (+t.hours || 0), 0);
-  const months = []; const now = new Date(); for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push(d.toISOString().slice(0, 7)); }
+  const now = new Date();
+  const curAbsM = now.getFullYear() * 12 + now.getMonth();
+  const toKey = a => { const y = Math.floor(a / 12), m = a % 12; return y + '-' + String(m + 1).padStart(2, '0'); };
+  const toLbl = (key, isCur, isNext) => new Date(key + '-01').toLocaleDateString('en-US', { month: 'short' }) + (isCur ? ' ●' : isNext ? ' →' : '');
+  // Collect past months (up to 4) that actually have deadline or completion data
+  const pastKeys = [];
+  for (let i = 12; i >= 1 && pastKeys.length < 4; i--) {
+    const k = toKey(curAbsM - i);
+    if (tasks.some(t => (t.deadline || '').slice(0, 7) === k || (t.completedAt || '').slice(0, 7) === k)) pastKeys.push(k);
+  }
+  const curKey = toKey(curAbsM), nextKey = toKey(curAbsM + 1);
+  const months = [...pastKeys, curKey, nextKey];
   const prog = months.map(m => tasks.filter(t => (t.deadline || '').slice(0, 7) === m).length);
   const compl = months.map(m => tasks.filter(t => (t.completedAt || '').slice(0, 7) === m).length);
   const maxv = Math.max(1, ...prog, ...compl);
-  const labels = months.map(m => new Date(m + '-01').toLocaleDateString('en-US', { month: 'short' }));
+  const labels = months.map(m => toLbl(m, m === curKey, m === nextKey));
   const byPrio = Object.keys(PRIOS).map(k => ({ k, label: PRIOS[k], n: mt.filter(t => t.priority === k).length }));
   const byStat = Object.keys(STATUSES).map(k => ({ k, label: STATUSES[k], n: mt.filter(t => t.status === k).length }));
   const byType = groupCount(mt, 'type'), byProd = groupCount(mt, 'product').slice(0, 10), bySector = groupCount(mt, 'sector');
@@ -463,7 +474,7 @@ function renderMetrics() {
     <div class="mpanel"><h4>Awaiting your reply</h4><div class="bigpct" style="color:var(--red)">${tasks.filter(t => t.status !== 'done' && replyDue(t)).length}</div><div style="color:var(--txt-dim);margin-top:6px;font-size:13px">supplier balls in your court</div></div>
   </div>
   <div class="metric-grid" style="grid-template-columns:1.4fr 1fr">
-    <div class="mpanel"><h4>Planned vs. completed — last 6 months</h4><div class="barchart">${labels.map((l, i) => `<div class="bc-col"><div class="bc-bars"><div class="bc-bar prog" style="height:${prog[i] / maxv * 120}px" title="${prog[i]} planned"></div><div class="bc-bar done" style="height:${compl[i] / maxv * 120}px" title="${compl[i]} completed"></div></div><div class="bc-lbl">${l}</div></div>`).join('')}</div><div class="legend"><span><i style="background:var(--blue)"></i>Planned</span><span><i style="background:var(--green)"></i>Completed</span></div></div>
+    <div class="mpanel"><h4>Deadlines vs. completed — by month</h4><div class="barchart">${labels.map((l, i) => `<div class="bc-col"><div class="bc-bars"><div class="bc-bar prog" style="height:${prog[i] / maxv * 120}px" title="${prog[i]} planned"></div><div class="bc-bar done" style="height:${compl[i] / maxv * 120}px" title="${compl[i]} completed"></div></div><div class="bc-lbl">${l}</div></div>`).join('')}</div><div class="legend"><span><i style="background:var(--blue)"></i>Planned</span><span><i style="background:var(--green)"></i>Completed</span></div></div>
     <div class="mpanel"><h4>By priority · ${pl}</h4>${distro(byPrio, a => prioColor[a.k])}<h4 style="margin-top:18px">By status</h4>${distro(byStat, a => STAT_COLOR[a.k])}</div>
   </div>
   <div class="metric-grid" style="grid-template-columns:1fr 1fr 1fr">
@@ -541,11 +552,13 @@ function openProductDetail(name) {
   document.getElementById('pd-ci').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('pd-ca').click(); });
   document.getElementById('pd-save').onclick = () => { settings.productData = settings.productData || {}; settings.productData[name] = { notes: document.getElementById('pd-notes').value.trim(), checklist }; sset('settings', settings); close(); toast('Saved ✓'); };
   document.getElementById('pd-del').onclick = () => {
-    if (confirm(`Remove "${name}" from products? Tasks tagged with it will NOT be deleted.`)) {
-      if (confirm(`Confirmar: remover "${name}" definitivamente?`)) {
-        settings.products = (settings.products || []).filter(p => p !== name);
-        if (settings.productData) delete settings.productData[name]; sset('settings', settings); close(); toast(`"${name}" removed`);
-      }
+    const tagged = tasks.filter(t => t.product === name);
+    const tagMsg = tagged.length ? `\n\n${tagged.length} task(s) are tagged with this product — they will be UNTAGGED (not deleted).` : '';
+    if (confirm(`Delete "${name}"?${tagMsg}\n\nThis cannot be undone.`)) {
+      settings.products = (settings.products || []).filter(p => p !== name);
+      if (settings.productData) delete settings.productData[name];
+      if (tagged.length) { tasks.forEach(t => { if (t.product === name) t.product = ''; }); sset('tasks', tasks); }
+      sset('settings', settings); close(); toast(`"${name}" deleted${tagged.length ? ` · ${tagged.length} task(s) untagged` : ''}`);
     }
   };
 }
