@@ -250,7 +250,7 @@ td .sub{font-size:11px;color:var(--txt-faint);margin-top:2px}
 .pills{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
 .pill{display:inline-flex;align-items:center;gap:7px;background:var(--panel-2);border:1px solid var(--line-soft);border-radius:20px;padding:5px 6px 5px 12px;font-size:13px;font-weight:600}
 .pill button{border:0;background:transparent;color:var(--txt-faint);font-size:13px;line-height:1}.pill button:hover{color:var(--red)}
-.pill{cursor:grab}.pill.dragging{opacity:.35;border-style:dashed;border-color:var(--accent)}.pill-lbl{cursor:pointer}.pill-lbl:hover{color:var(--accent);text-decoration:underline dotted}
+.pill-lbl{cursor:pointer;transition:.12s}.pill-lbl:hover{color:var(--accent)}.pmv{border:0;background:transparent;color:var(--txt-faint);font-size:11px;padding:0 2px;line-height:1;cursor:pointer;transition:.12s}.pmv:hover{color:var(--txt)}
 .addline{display:flex;gap:8px}.addline input{flex:1;background:var(--panel-2);border:1px solid var(--line-soft);border-radius:9px;color:var(--txt);padding:8px 11px;font-size:13.5px}.addline input:focus{outline:none;border-color:var(--line)}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--panel-2);border:1px solid var(--line);color:var(--txt);padding:11px 18px;border-radius:11px;font-size:14px;opacity:0;transition:.25s;z-index:70;box-shadow:0 12px 30px -10px #000}.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 @media(max-width:1000px){.board{grid-template-columns:1fr 1fr}}
@@ -772,66 +772,52 @@ function renderIdeas(){document.getElementById('ideaGrid').innerHTML=`<div class
   const add=document.getElementById('ideaAdd');if(add)add.onclick=async()=>{const t=document.getElementById('ideaT').value.trim(),b=document.getElementById('ideaB').value.trim();if(!t&&!b){toast('Write something first');return;}ideas.unshift({id:uid(),title:t,body:b,createdAt:new Date().toISOString()});await saveIdeas();toast('Idea saved 💡');};}
 
 /* SETTINGS */
-function pillHTML(field,i,v){return `<span class=”pill” draggable=”true” data-pfield=”${field}” data-pidx=”${i}” title=”Drag to reorder · click name to rename”><span class=”pill-lbl” data-pedit=”${field}:${i}”>${esc(v)}</span><button data-rem=”${field}:${i}” title=”Remove”>✕</button></span>`;}
+function pillHTML(field,i,v,total){
+  const mv=(dir,icon)=>`<button class=”pmv” data-mv=”${field}:${i}:${dir}” title=”${dir<0?'Move up':'Move down'}”>${icon}</button>`;
+  return `<span class=”pill”>`
+    +(i>0?mv(-1,'↑'):'')
+    +`<span class=”pill-lbl” data-pedit=”${field}:${i}” title=”Click to rename”>${esc(v)}</span>`
+    +(i<total-1?mv(1,'↓'):'')
+    +`<button data-rem=”${field}:${i}” title=”Remove”>✕</button></span>`;
+}
 
 function renderSettings(){
-  const listPanel=(title,desc,field)=>`<div class=”set-panel”><h4>${title}</h4><div class=”sd”>${desc}</div><div class=”pills” id=”pills-${field}”>${(settings[field]||[]).map((v,i)=>pillHTML(field,i,v)).join('')||'<span style=”color:var(--txt-faint);font-size:13px”>None yet.</span>'}</div><div class=”addline”><input id=”add-${field}” placeholder=”Add new…”><button class=”btn sm primary” data-add=”${field}”>Add</button></div></div>`;
+  const listPanel=(title,desc,field)=>{
+    const items=settings[field]||[];
+    const pills=items.map((v,i)=>pillHTML(field,i,v,items.length)).join('');
+    return `<div class=”set-panel”><h4>${title}</h4><div class=”sd”>${desc}</div><div class=”pills”>${pills||'<span style=”color:var(--txt-faint);font-size:13px”>None yet.</span>'}</div><div class=”addline”><input id=”add-${field}” placeholder=”Add new…”><button class=”btn sm primary” data-add=”${field}”>Add</button></div></div>`;
+  };
+  let storedToken='';try{storedToken=localStorage.getItem('polaris_gh_token')||'';}catch(e){}
   document.getElementById('settingsBody').innerHTML=`<div class=”set-grid”>
-      <div class=”set-panel”><h4>Your name</h4><div class=”sd”>Used in the greeting on Today.</div><div class=”addline”><input id=”set-name” value=”${esc(settings.name||'')}” placeholder=”Your name”><button class=”btn sm primary” id=”saveName”>Save</button></div></div>
+      <div class=”set-panel”><h4>Your name</h4><div class=”sd”>Used in the “Good morning” greeting on Today.</div><div class=”addline”><input id=”set-name” value=”${esc(settings.name||'')}” placeholder=”Your name”><button class=”btn sm primary” id=”saveName”>Save</button></div></div>
       ${listPanel('Activity types','e.g. Project document, Mechanical test, Supplier dealing.','types')}
-      ${listPanel('Sectors','Which department requested the work.','sectors')}
-      ${listPanel('Products / systems','Reference products for the Products page & metrics.','products')}
+      ${listPanel('Sectors','Functional area the work belongs to.','sectors')}
+      ${listPanel('Demand sources','Who/where it came from.','sources')}
+      ${listPanel('Products / systems','Reference products powering the Products page & metrics.','products')}
       ${listPanel('Project template','Standard documents created when you start a project.','template')}
     </div>
     <div class=”set-panel” style=”margin-top:14px”><h4>☁️ Cloud sync — GitHub Gist</h4><div class=”sd”>Paste your GitHub token once. Data syncs automatically between all your devices.</div>
-      <div class=”addline” style=”margin-bottom:10px”><input id=”set-token” type=”password” placeholder=”GitHub token  ghp_…” value=”${localStorage.getItem('polaris_gh_token')||''}”><button class=”btn sm primary” id=”saveToken”>Save token</button></div>
-      <div style=”display:flex;gap:10px;align-items:center;flex-wrap:wrap”><button class=”btn sm” id=”syncNow”>↑ Sync now</button><button class=”btn sm” id=”loadCloud”>↓ Load from cloud</button></div></div>
-    <div class=”set-panel” style=”margin-top:14px”><h4>Data</h4><div class=”sd”>Saved automatically locally and to the cloud. Use a backup for an extra copy.</div><div style=”display:flex;gap:10px;flex-wrap:wrap”><button class=”btn sm” id=”setExport”>⬇︎ Export backup</button><button class=”btn sm” id=”setImport”>⬆︎ Import backup</button></div></div>`;
+      <div class=”addline” style=”margin-bottom:10px”><input id=”set-token” type=”password” placeholder=”GitHub token  ghp_…” value=”${storedToken}”><button class=”btn sm primary” id=”saveToken”>Save token</button></div>
+      <div style=”display:flex;gap:10px;flex-wrap:wrap”><button class=”btn sm” id=”syncNow”>↑ Sync now</button><button class=”btn sm” id=”loadCloud”>↓ Load from cloud</button></div></div>
+    <div class=”set-panel” style=”margin-top:14px”><h4>Data</h4><div class=”sd”>Saved automatically. Use a backup to move between devices or keep it safe.</div><div style=”display:flex;gap:10px;flex-wrap:wrap”><button class=”btn sm” id=”setExport”>⬇︎ Export backup</button><button class=”btn sm” id=”setImport”>⬆︎ Import backup</button></div></div>`;
+
   document.getElementById('saveName').onclick=()=>{settings.name=document.getElementById('set-name').value.trim();sset('settings',settings);toast('Saved ✓');};
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const f=b.dataset.add;const inp=document.getElementById('add-'+f);const val=inp.value.trim();if(!val)return;settings[f]=settings[f]||[];if(!settings[f].includes(val))settings[f].push(val);sset('settings',settings);renderSettings();});
   document.querySelectorAll('[data-rem]').forEach(b=>b.onclick=()=>{const[f,i]=b.dataset.rem.split(':');settings[f].splice(+i,1);sset('settings',settings);renderSettings();});
-  document.getElementById('setExport').onclick=doExport;document.getElementById('setImport').onclick=()=>document.getElementById('importFile').click();
-  document.getElementById('saveToken').onclick=()=>{const v=document.getElementById('set-token').value.trim();if(!v){toast('Paste your GitHub token first');return;}localStorage.setItem('polaris_gh_token',v);toast('Token saved ✓ — syncing…');gistSave();};
+  document.querySelectorAll('[data-mv]').forEach(b=>b.onclick=()=>{const[f,i,d]=b.dataset.mv.split(':');const arr=settings[f];const to=+i+ +d;if(to<0||to>=arr.length)return;[arr[+i],arr[to]]=[arr[to],arr[+i]];sset('settings',settings);renderSettings();toast('Reordered ✓');});
+  document.querySelectorAll('[data-pedit]').forEach(lbl=>lbl.onclick=()=>{
+    const[field,idx]=lbl.dataset.pedit.split(':');const old=settings[field][+idx];
+    const inp=document.createElement('input');
+    inp.value=old;inp.style.cssText='background:var(--panel);border:1px solid var(--accent);border-radius:6px;color:var(--txt);padding:2px 8px;font-size:13px;width:120px;font-family:inherit';
+    lbl.replaceWith(inp);inp.focus();inp.select();
+    const save=()=>{const nv=inp.value.trim();if(nv&&nv!==old){settings[field][+idx]=nv;const tf={types:'type',sectors:'sector',products:'product'}[field];if(tf){tasks.forEach(t=>{if(t[tf]===old)t[tf]=nv;});sset('tasks',tasks);}sset('settings',settings);toast('Renamed ✓ — all tasks updated');}renderSettings();};
+    inp.onblur=save;inp.onkeydown=e=>{if(e.key==='Enter'){inp.onblur=null;save();}if(e.key==='Escape'){inp.onblur=null;renderSettings();}};
+  });
+  document.getElementById('setExport').onclick=doExport;
+  document.getElementById('setImport').onclick=()=>document.getElementById('importFile').click();
+  document.getElementById('saveToken').onclick=()=>{const v=document.getElementById('set-token').value.trim();if(!v){toast('Paste your GitHub token first');return;}try{localStorage.setItem('polaris_gh_token',v);}catch(e){}toast('Token saved ✓ — syncing…');gistSave();};
   document.getElementById('syncNow').onclick=()=>gistSave();
   document.getElementById('loadCloud').onclick=async()=>{const ok=await gistLoad();if(ok){tasks=lsGet('tasks')||tasks;vocab=lsGet('vocab')||vocab;ideas=lsGet('ideas')||ideas;const s=lsGet('settings');if(s)settings={...DEFAULTS,...s};refreshAll();toast('Loaded from cloud ✓');}else toast('Nothing loaded — check your token');};
-  bindPillDrag();
-}
-
-/* PILL DRAG + INLINE EDIT */
-let _pdField=null,_pdIdx=null;
-function bindPillDrag(){
-  document.querySelectorAll('.pill[draggable]').forEach(pill=>{
-    pill.addEventListener('dragstart',e=>{_pdField=pill.dataset.pfield;_pdIdx=+pill.dataset.pidx;e.dataTransfer.effectAllowed='move';pill.classList.add('dragging');});
-    pill.addEventListener('dragend',()=>pill.classList.remove('dragging'));
-    pill.addEventListener('dragover',e=>e.preventDefault());
-    pill.addEventListener('drop',e=>{
-      e.preventDefault();pill.classList.remove('dragging');
-      const toIdx=+pill.dataset.pidx,toField=pill.dataset.pfield;
-      if(_pdField!==toField||_pdIdx===toIdx)return;
-      const arr=settings[_pdField];const[moved]=arr.splice(_pdIdx,1);arr.splice(toIdx,0,moved);
-      sset('settings',settings);renderSettings();toast('Order saved ✓');
-    });
-  });
-  document.querySelectorAll('[data-pedit]').forEach(lbl=>{
-    lbl.onclick=()=>{
-      const[field,idx]=lbl.dataset.pedit.split(':');const old=settings[field][+idx];
-      const inp=document.createElement('input');
-      inp.value=old;inp.style.cssText='background:var(--ink);border:1px solid var(--accent);border-radius:5px;color:var(--txt);padding:0 6px;font-size:13px;width:110px;font-family:inherit;height:22px';
-      lbl.replaceWith(inp);inp.focus();inp.select();
-      const save=()=>{
-        const nv=inp.value.trim();
-        if(nv&&nv!==old){
-          settings[field][+idx]=nv;
-          const tf={types:'type',sectors:'sector',products:'product'}[field];
-          if(tf){tasks.forEach(t=>{if(t[tf]===old)t[tf]=nv;});sset('tasks',tasks);}
-          sset('settings',settings);toast('Renamed — all tasks updated ✓');
-        }
-        renderSettings();
-      };
-      inp.onblur=save;
-      inp.onkeydown=e=>{if(e.key==='Enter'){inp.onblur=null;save();}if(e.key==='Escape'){inp.onblur=null;renderSettings();}};
-    };
-  });
 }
 
 /* EXPORT / IMPORT */
