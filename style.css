@@ -60,6 +60,11 @@ button{font-family:inherit;cursor:pointer}input,textarea,select{font-family:inhe
 .sec-tag{font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:var(--green);background:var(--green-soft);padding:1px 7px;border-radius:5px}
 .prio-tag{font-family:var(--mono);font-size:10px;letter-spacing:.04em;padding:1px 7px;border-radius:5px;font-weight:600}
 .prio-tag.prio-urgent{background:var(--red-soft);color:var(--red)}.prio-tag.prio-high{background:var(--amber-soft);color:var(--amber)}.prio-tag.prio-medium{background:var(--blue-soft);color:var(--blue)}.prio-tag.prio-low{background:var(--line);color:var(--txt-faint)}
+.sprint-ic{display:inline-flex;align-items:center;justify-content:center;background:var(--blue-soft);border:1px solid rgba(91,140,255,.28);border-radius:5px;padding:0 5px;font-size:11px;line-height:1.6;cursor:default}
+.directive-ic{display:inline-flex;align-items:center;justify-content:center;background:var(--amber-soft);border:1px solid rgba(246,168,33,.28);border-radius:5px;padding:0 6px;font-size:11px;line-height:1.6;cursor:default;color:var(--amber);font-weight:800}
+.sprint-lbl{display:flex;align-items:center;gap:9px;cursor:pointer;padding:10px 12px;background:var(--panel-2);border:1px solid var(--line-soft);border-radius:10px;font-size:13.5px;width:100%;transition:.12s}
+.sprint-lbl:hover{border-color:var(--accent)}
+.sprint-lbl input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px;flex:none;cursor:pointer}
 .src{font-family:var(--mono);font-size:10px;letter-spacing:.04em;padding:1px 7px;border-radius:5px;font-weight:600;background:var(--line);color:var(--txt-dim)}
 .src-Director{background:var(--red-soft);color:var(--red)}.src-Coordinator{background:var(--amber-soft);color:var(--amber)}
 .due{font-family:var(--mono);font-size:11.5px;padding:2px 8px;border-radius:6px;background:var(--line);color:var(--txt-dim)}
