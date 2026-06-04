@@ -158,7 +158,9 @@ td .sub{font-size:11px;color:var(--txt-faint);margin-top:2px}
 .mbody{padding:20px;display:flex;flex-direction:column;gap:14px;max-height:72vh;overflow:auto}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
 .field label{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--txt-faint);margin-bottom:6px}
-.field input,.field textarea,.field select{width:100%;background:var(--panel-2);border:1px solid var(--line-soft);border-radius:10px;color:var(--txt);padding:10px 12px;font-size:14.5px}
+.field input,.field textarea,.field select{width:100%;background:var(--panel-2);border:1px solid var(--line-soft);border-radius:10px;color:var(--txt);padding:10px 12px;font-size:14.5px;color-scheme:dark}
+input[type="date"]{color-scheme:dark}
+tr.addrow input,tr.addrow select{color-scheme:dark}
 .field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:#34456b;box-shadow:0 0 0 3px rgba(77,141,255,.1)}
 .field textarea{resize:vertical;min-height:60px;font-family:inherit}
 .prog-row{display:flex;align-items:center;gap:12px}.prog-row input[type=range]{flex:1;accent-color:var(--accent)}
@@ -284,6 +286,22 @@ td .sub{font-size:11px;color:var(--txt-faint);margin-top:2px}
 .addline{display:flex;gap:8px}
 .addline input{flex:1;background:var(--panel-2);border:1px solid var(--line-soft);border-radius:9px;color:var(--txt);padding:8px 11px;font-size:13.5px}
 .addline input:focus{outline:none;border-color:var(--line)}
+
+/* CUSTOM CONFIRM */
+.cscrim{position:fixed;inset:0;background:rgba(5,8,14,.75);backdrop-filter:blur(4px);display:grid;place-items:center;z-index:80;animation:fadein .15s ease}
+@keyframes fadein{from{opacity:0}}
+.cbox{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px 26px;max-width:400px;width:90%;box-shadow:0 30px 80px -20px #000;animation:pop .2s ease}
+.cmsg{font-size:15px;line-height:1.55;margin-bottom:20px;color:var(--txt)}
+.cbtns{display:flex;justify-content:flex-end;gap:10px}
+.csm{padding:8px 18px;font-size:13.5px}
+
+/* ADD ROW TRIGGER */
+.addrow-trigger td{padding:10px 8px}
+.ar-trigger{border:1px dashed var(--line-soft);background:transparent;color:var(--txt-faint);padding:8px 18px;border-radius:9px;font-size:13px;font-weight:600;width:100%;transition:.15s}
+.ar-trigger:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+.ar-actions{display:flex;gap:5px}
+.ar-cancel{border:0;background:transparent;color:var(--txt-faint);font-size:14px;width:24px;height:26px;border-radius:6px;line-height:1}
+.ar-cancel:hover{color:var(--red);background:var(--red-soft)}
 
 /* TOAST */
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--panel-2);border:1px solid var(--line);color:var(--txt);padding:11px 18px;border-radius:11px;font-size:14px;opacity:0;transition:.25s;z-index:70;box-shadow:0 12px 30px -10px #000}
