@@ -87,8 +87,8 @@ const esc = s => (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 const uniq = a => [...new Set(a)];
 const replyDue = t => Array.isArray(t.contacts) && t.contacts.some(c => c.ball === 'me');
 const replyBadge = t => replyDue(t) ? '<span class="reply-badge">↩︎ reply due</span>' : '';
-const sprintBadge = t => t.sprint ? `<span class="sprint-ic" title="Sprint activity">🏃</span>` : '';
-const directiveBadge = t => (t.source === 'Coordinator' || t.source === 'Director') ? `<span class="directive-ic" title="From ${esc(t.source)}">⚠</span>` : '';
+const sprintBadge = t => (t.sector === 'Engineering Projects' && t.sprint) ? `<span class="sprint-ic" title="Sprint activity">🏃</span>` : '';
+const directiveBadge = t => (t.sector === 'Engineering Coordination' || t.sector === 'Industrial Management') ? `<span class="directive-ic" title="${esc(t.sector)}">⚠</span>` : '';
 const typeOptions = () => uniq([...(settings.types || []), ...tasks.map(t => t.type).filter(Boolean)]);
 const sectorOptions = () => uniq([...(settings.sectors || []), ...tasks.map(t => t.sector).filter(Boolean)]);
 const productOptions = () => uniq([...(settings.products || []), ...tasks.map(t => t.product).filter(Boolean)]);
@@ -368,10 +368,7 @@ function openModal(task) {
         <div class="field"><label>Product</label><select id="f-prod">${selOpts(productOptions(), t.product)}</select></div>
         <div class="field"><label>Sector</label><select id="f-sector">${selOpts(sectorOptions(), t.sector)}</select></div>
       </div>
-      <div class="row2">
-        <div class="field"><label>Source <span style="font-weight:400;color:var(--txt-faint)">(who assigned it)</span></label><select id="f-source">${selOpts(sourceOptions(), t.source)}</select></div>
-        <div class="field" style="display:flex;align-items:flex-end"><label class="sprint-lbl"><input type="checkbox" id="f-sprint" ${t.sprint ? 'checked' : ''}><span class="sprint-ic" style="font-size:14px;padding:0 3px">🏃</span> Sprint activity <span style="color:var(--txt-faint);font-size:12px">(Scrum)</span></label></div>
-      </div>
+      <div class="field" style="max-width:340px"><label class="sprint-lbl"><input type="checkbox" id="f-sprint" ${t.sprint ? 'checked' : ''}><span class="sprint-ic" style="font-size:14px;padding:0 4px">🏃</span> Sprint activity <span style="color:var(--txt-faint);font-size:12px">(Scrum — only applies when Sector = Engineering Projects)</span></label></div>
       <div class="row3">
         <div class="field"><label>Deadline</label><input id="f-due" type="date" value="${t.deadline || ''}"></div>
         <div class="field"><label>Priority</label><select id="f-prio">${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}" ${t.priority === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
@@ -425,7 +422,7 @@ function openModal(task) {
 
   document.getElementById('mSave').onclick = async () => {
     const v = id => document.getElementById(id).value;
-    const obj = { id: t.id || uid(), num: t.num || nextNum(), title: v('f-title').trim(), description: v('f-desc').trim(), requester: t.requester || '', product: v('f-prod').trim(), type: v('f-type'), sector: v('f-sector'), source: v('f-source'), sprint: document.getElementById('f-sprint').checked, project: t.project || '', deadline: v('f-due'), priority: v('f-prio'), status: v('f-status'), progress: parseInt(v('f-prog')) || 0, hours: parseFloat(v('f-hours')) || 0, blockers: v('f-block').trim(), notes: v('f-notes').trim(), contacts: clog, createdAt: t.createdAt || new Date().toISOString(), completedAt: t.completedAt || null };
+    const obj = { id: t.id || uid(), num: t.num || nextNum(), title: v('f-title').trim(), description: v('f-desc').trim(), requester: t.requester || '', product: v('f-prod').trim(), type: v('f-type'), sector: v('f-sector'), source: t.source || '', sprint: document.getElementById('f-sprint').checked, project: t.project || '', deadline: v('f-due'), priority: v('f-prio'), status: v('f-status'), progress: parseInt(v('f-prog')) || 0, hours: parseFloat(v('f-hours')) || 0, blockers: v('f-block').trim(), notes: v('f-notes').trim(), contacts: clog, createdAt: t.createdAt || new Date().toISOString(), completedAt: t.completedAt || null };
     if (obj.status === 'done') { if (!obj.completedAt) obj.completedAt = new Date().toISOString(); obj.progress = 100; }
     if (obj.progress >= 100 && obj.status !== 'done') { obj.status = 'done'; obj.completedAt = new Date().toISOString(); }
     if (!obj.title && !obj.description) { toast('Add at least a title'); return; }
