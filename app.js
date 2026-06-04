@@ -87,7 +87,7 @@ const esc = s => (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 const uniq = a => [...new Set(a)];
 const replyDue = t => Array.isArray(t.contacts) && t.contacts.some(c => c.ball === 'me');
 const replyBadge = t => replyDue(t) ? '<span class="reply-badge">↩︎ reply due</span>' : '';
-const sprintBadge = t => (t.sector === 'Engineering Projects' && t.sprint) ? `<span class="sprint-ic" title="Sprint activity">🏃</span>` : '';
+const sprintBadge = t => (t.sector === 'Engineering Projects' && t.sprint) ? `<span class="sprint-ic" title="Sprint activity"><svg width="9" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>` : '';
 const directiveBadge = t => (t.sector === 'Engineering Coordination' || t.sector === 'Industrial Management') ? `<span class="directive-ic" title="${esc(t.sector)}">⚠</span>` : '';
 const typeOptions = () => uniq([...(settings.types || []), ...tasks.map(t => t.type).filter(Boolean)]);
 const sectorOptions = () => uniq([...(settings.sectors || []), ...tasks.map(t => t.sector).filter(Boolean)]);
@@ -368,7 +368,7 @@ function openModal(task) {
         <div class="field"><label>Product</label><select id="f-prod">${selOpts(productOptions(), t.product)}</select></div>
         <div class="field"><label>Sector</label><select id="f-sector">${selOpts(sectorOptions(), t.sector)}</select></div>
       </div>
-      <div class="field" style="max-width:340px"><label class="sprint-lbl"><input type="checkbox" id="f-sprint" ${t.sprint ? 'checked' : ''}><span class="sprint-ic" style="font-size:14px;padding:0 4px">🏃</span> Sprint activity <span style="color:var(--txt-faint);font-size:12px">(Scrum — only applies when Sector = Engineering Projects)</span></label></div>
+      <div class="field" style="max-width:260px"><label class="sprint-lbl"><input type="checkbox" id="f-sprint" ${t.sprint ? 'checked' : ''}><span class="sprint-ic" style="padding:3px 6px"><svg width="10" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span> Sprint activity</label></div>
       <div class="row3">
         <div class="field"><label>Deadline</label><input id="f-due" type="date" value="${t.deadline || ''}"></div>
         <div class="field"><label>Priority</label><select id="f-prio">${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}" ${t.priority === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
