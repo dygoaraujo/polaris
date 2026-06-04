@@ -1,7 +1,7 @@
-<!-- Engineering Command Center v4 -->
+<!-- Polaris v1 — Engineering Task Manager -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Command Center</title>
+<title>Polaris</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 :root{
@@ -263,7 +263,7 @@ td .sub{font-size:11px;color:var(--txt-faint);margin-top:2px}
 
 <div class="layout">
   <aside class="sidebar" id="sidebar">
-    <div class="side-brand"><div class="logo"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#0b1220" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.2"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/><circle cx="12" cy="12" r="2.4" fill="#0b1220" stroke="none"/></svg></div><div class="bt">Command<br>Center</div><button class="collapse-btn" id="collapseBtn" title="Collapse">⟨⟩</button></div>
+    <div class="side-brand"><div class="logo"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#0b1220" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></div><div class="bt">Polaris</div><button class="collapse-btn" id="collapseBtn" title="Collapse">⟨⟩</button></div>
     <div class="nav-group-label">Work</div>
     <button class="nav-item on" data-tab="today"><span class="ic">☀️</span><span class="lbl">Today</span><span class="cnt" id="c-today">0</span></button>
     <button class="nav-item" data-tab="board"><span class="ic">🗂️</span><span class="lbl">Board</span><span class="cnt" id="c-board">0</span></button>
@@ -281,6 +281,7 @@ td .sub{font-size:11px;color:var(--txt-faint);margin-top:2px}
       <button class="btn icon ghost sm" id="exportBtn" title="Export backup">⬇︎</button>
       <button class="btn icon ghost sm" id="importBtn" title="Import backup">⬆︎</button>
       <input type="file" id="importFile" accept="application/json" class="hide">
+      <span id="syncStatus" style="font-size:13px;color:var(--txt-faint);padding:4px 2px;cursor:default" title="Sync status">●</span>
     </div>
   </aside>
   <div class="drawer-scrim" id="drawerScrim"></div>
@@ -333,9 +334,64 @@ td .sub{font-size:11px;color:var(--txt-faint);margin-top:2px}
 <div class="toast" id="toast"></div>
 
 <script>
+// ── Storage (localStorage + Gist sync) ──────────────────────────────────────
 const mem={};
-async function sget(k,d){try{if(window.storage){const r=await window.storage.get(k);return r?JSON.parse(r.value):d;}}catch(e){if(k in mem)return mem[k];}return(k in mem)?mem[k]:d;}
-async function sset(k,v){mem[k]=v;try{if(window.storage)await window.storage.set(k,JSON.stringify(v));}catch(e){}}
+const LS_PREFIX='polaris_';
+function lsGet(k){try{const v=localStorage.getItem(LS_PREFIX+k);return v!==null?JSON.parse(v):undefined;}catch(e){return undefined;}}
+function lsSet(k,v){try{localStorage.setItem(LS_PREFIX+k,JSON.stringify(v));}catch(e){}}
+
+async function sget(k,d){
+  // 1. Claude artifact environment
+  try{if(window.storage){const r=await window.storage.get(k);if(r)return JSON.parse(r.value);}}catch(e){}
+  // 2. localStorage
+  const lv=lsGet(k);if(lv!==undefined)return lv;
+  // 3. in-memory fallback
+  return(k in mem)?mem[k]:d;
+}
+async function sset(k,v){
+  mem[k]=v;
+  lsSet(k,v);
+  try{if(window.storage)await window.storage.set(k,JSON.stringify(v));}catch(e){}
+  scheduleGistSave();
+}
+
+// ── Gist sync ────────────────────────────────────────────────────────────────
+const GIST_ID='d58f9448582e6aeef638dfd28b2482a7';
+const GIST_FILE='polaris-data.json';
+const GIST_KEYS=['tasks','vocab','ideas','settings'];
+let gistTimer=null;
+
+function getToken(){return localStorage.getItem('polaris_gh_token')||'';}
+function getSyncEl(){return document.getElementById('syncStatus');}
+function setSyncStatus(state,msg){const el=getSyncEl();if(!el)return;const cfg={idle:{c:'#5b6886',t:'●'},saving:{c:'var(--amber)',t:'↑ saving…'},ok:{c:'var(--green)',t:'✓ synced'},err:{c:'var(--red)',t:'⚠ sync error'}};const s=cfg[state]||cfg.idle;el.style.color=s.c;el.title=msg||'';el.textContent=s.t;}
+
+async function gistLoad(){
+  const token=getToken();if(!token)return false;
+  setSyncStatus('saving','Loading from cloud…');
+  try{
+    const res=await fetch(`https://api.github.com/gists/${GIST_ID}`,{headers:{'Authorization':`token ${token}`,'Accept':'application/vnd.github.v3+json'}});
+    if(!res.ok){setSyncStatus('err','Load failed: '+res.status);return false;}
+    const data=await res.json();
+    const file=data.files[GIST_FILE];if(!file||file.content==='{}'){setSyncStatus('ok','No cloud data yet');return false;}
+    const parsed=JSON.parse(file.content);
+    GIST_KEYS.forEach(k=>{if(parsed[k]!==undefined)lsSet(k,parsed[k]);});
+    setSyncStatus('ok','Loaded from cloud');return true;
+  }catch(e){setSyncStatus('err','Network error');return false;}
+}
+
+async function gistSave(){
+  const token=getToken();if(!token){setSyncStatus('idle','Token not set — data saved locally only');return;}
+  setSyncStatus('saving','Saving to cloud…');
+  try{
+    const payload={};
+    GIST_KEYS.forEach(k=>{const v=lsGet(k);if(v!==undefined)payload[k]=v;});
+    const res=await fetch(`https://api.github.com/gists/${GIST_ID}`,{method:'PATCH',headers:{'Authorization':`token ${token}`,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},body:JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(payload)}}})});
+    if(!res.ok){setSyncStatus('err','Save failed: '+res.status);return;}
+    setSyncStatus('ok','Saved to cloud ✓');
+  }catch(e){setSyncStatus('err','Network error — saved locally');}
+}
+
+function scheduleGistSave(){clearTimeout(gistTimer);gistTimer=setTimeout(gistSave,3000);}
 
 let tasks=[],vocab=[],ideas=[],settings={};
 let current='today',filter='all',boardFilter='all',metricPeriod='total',search='',sortCol='deadline',sortDir=1,calY,calM,calSel=null;
@@ -727,11 +783,17 @@ function renderSettings(){
       ${listPanel('Products / systems','Reference products powering the Products page & metrics.','products')}
       ${listPanel('Project template','Standard documents created when you start a project.','template')}
     </div>
-    <div class="set-panel" style="margin-top:14px"><h4>Data</h4><div class="sd">Saved automatically. Use a backup to move between devices or keep it safe.</div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn sm" id="setExport">⬇︎ Export backup</button><button class="btn sm" id="setImport">⬆︎ Import backup</button></div></div>`;
+    <div class="set-panel" style="margin-top:14px"><h4>☁️ Cloud sync — GitHub Gist</h4><div class="sd">Paste your GitHub token once. Data syncs automatically between all your devices.</div>
+      <div class="addline" style="margin-bottom:10px"><input id="set-token" type="password" placeholder="GitHub token  ghp_…" value="${localStorage.getItem('polaris_gh_token')||''}"><button class="btn sm primary" id="saveToken">Save token</button></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn sm" id="syncNow">↑ Sync now</button><button class="btn sm" id="loadCloud">↓ Load from cloud</button><span id="syncStatusSettings" style="font-size:13px;color:var(--txt-faint)"></span></div></div>
+    <div class="set-panel" style="margin-top:14px"><h4>Data</h4><div class="sd">Saved automatically locally and to the cloud. Use a backup for an extra copy.</div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn sm" id="setExport">⬇︎ Export backup</button><button class="btn sm" id="setImport">⬆︎ Import backup</button></div></div>`;
   document.getElementById('saveName').onclick=()=>{settings.name=document.getElementById('set-name').value.trim();sset('settings',settings);toast('Saved ✓');renderToday&&0;};
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const f=b.dataset.add;const inp=document.getElementById('add-'+f);const val=inp.value.trim();if(!val)return;settings[f]=settings[f]||[];if(!settings[f].includes(val))settings[f].push(val);sset('settings',settings);renderSettings();});
   document.querySelectorAll('[data-rem]').forEach(b=>b.onclick=()=>{const[f,i]=b.dataset.rem.split(':');settings[f].splice(+i,1);sset('settings',settings);renderSettings();});
   document.getElementById('setExport').onclick=doExport;document.getElementById('setImport').onclick=()=>document.getElementById('importFile').click();
+  document.getElementById('saveToken').onclick=()=>{const v=document.getElementById('set-token').value.trim();if(!v){toast('Paste your GitHub token first');return;}localStorage.setItem('polaris_gh_token',v);toast('Token saved ✓ — syncing…');gistSave();};
+  document.getElementById('syncNow').onclick=()=>gistSave();
+  document.getElementById('loadCloud').onclick=async()=>{const ok=await gistLoad();if(ok){tasks=lsGet('tasks')||tasks;vocab=lsGet('vocab')||vocab;ideas=lsGet('ideas')||ideas;const s=lsGet('settings');if(s)settings={...DEFAULTS,...s};refreshAll();toast('Loaded from cloud ✓');}else toast('Nothing loaded — check your token');};
 }
 
 /* EXPORT / IMPORT */
@@ -784,6 +846,9 @@ document.getElementById('drawerScrim').onclick=closeDrawer;
 let tt;function toast(m){const el=document.getElementById('toast');el.textContent=m;el.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('show'),2200);}
 
 (async function init(){
+  // Try to load fresh data from Gist (if token is set)
+  const hadCloud=await gistLoad();
+
   settings={...DEFAULTS,...(await sget('settings',{}))};
   tasks=await sget('tasks',null);if(tasks===null){tasks=seed();await sset('tasks',tasks);}
   tasks.forEach(t=>{if(!t.sector&&t.origin)t.sector={engineering:'Engineering',production:'Production',personal:'Personal',other_sector:'Maintenance'}[t.origin]||'';if(!('type'in t))t.type='';if(!('source'in t))t.source='';if(!('project'in t))t.project='';if(!Array.isArray(t.contacts))t.contacts=[];});
@@ -791,6 +856,7 @@ let tt;function toast(m){const el=document.getElementById('toast');el.textConten
   vocab=await sget('vocab',[]);ideas=await sget('ideas',[]);
   if(settings.collapsed)document.getElementById('sidebar').classList.add('collapsed');
   const n=new Date();calY=n.getFullYear();calM=n.getMonth();
+  if(!getToken())setSyncStatus('idle','Token not set — open Settings to enable sync');
   show('today');
 })();
 function seed(){const iso=o=>{const d=new Date();d.setDate(d.getDate()+o);return d.toISOString().slice(0,10);};const now=new Date().toISOString();
