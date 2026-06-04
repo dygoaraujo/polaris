@@ -64,7 +64,8 @@ function scheduleGistSave() { clearTimeout(gistTimer); gistTimer = setTimeout(gi
 // ── State ────────────────────────────────────────────────────────────────────
 let tasks = [], vocab = [], ideas = [], settings = {};
 let current = 'today', filter = 'all', boardFilter = 'all', metricPeriod = 'total';
-let search = '', sortCol = 'deadline', sortDir = 1, calY, calM, calSel = null;
+let search = '', sortCol = 'createdAt', sortDir = -1, calY, calM, calSel = null;
+let addRowOpen = false;
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const PRIOS = { urgent: 'Urgent', high: 'High', medium: 'Medium', low: 'Low' };
@@ -233,19 +234,30 @@ function bindDnD() {
 }
 
 // ── TABLE ─────────────────────────────────────────────────────────────────────
-function renderFilters() { document.getElementById('filters').innerHTML = FILTER_GROUPS.map(g => g.map(f => `<button class="chip ${filter === f.k ? 'on' : ''} ${f.danger ? 'danger' : ''}" data-f="${f.k}">${f.label} <span class="n">${countFor(f.k)}</span></button>`).join('')).join('<span class="fdiv"></span>'); }
-const COLS = [{ k: 'num', l: '#' }, { k: 'title', l: 'Task' }, { k: 'type', l: 'Type' }, { k: 'product', l: 'Product' }, { k: 'sector', l: 'Sector' }, { k: 'createdAt', l: 'Created' }, { k: 'deadline', l: 'Deadline' }, { k: 'priority', l: 'Priority' }, { k: 'progress', l: 'Progress' }, { k: 'status', l: 'Status' }];
+function renderFilters() {
+  const isDeadlineSort = sortCol === 'deadline' && sortDir === 1;
+  const isNewestSort = sortCol === 'createdAt' && sortDir === -1;
+  document.getElementById('filters').innerHTML =
+    FILTER_GROUPS.map(g => g.map(f => `<button class="chip ${filter === f.k ? 'on' : ''} ${f.danger ? 'danger' : ''}" data-f="${f.k}">${f.label} <span class="n">${countFor(f.k)}</span></button>`).join('')).join('<span class="fdiv"></span>')
+    + `<span class="fdiv"></span><button class="chip ${isNewestSort ? 'on' : ''}" data-sq="createdAt:-1">🆕 Newest</button><button class="chip ${isDeadlineSort ? 'on' : ''}" data-sq="deadline:1">📅 Deadline ↑</button>`;
+}
+const COLS = [{ k: 'num', l: '#' }, { k: 'title', l: 'Task' }, { k: 'type', l: 'Type' }, { k: 'product', l: 'Product' }, { k: 'sector', l: 'Sector' }, { k: 'createdAt', l: 'Created' }, { k: 'deadline', l: 'Deadline' }, { k: 'daysLeft', l: 'Days left' }, { k: 'priority', l: 'Priority' }, { k: 'progress', l: 'Progress' }, { k: 'status', l: 'Status' }];
+const NUM_COLS = COLS.length;
 const nextNum = () => Math.max(0, ...tasks.map(t => t.num || 0)) + 1;
 
 function addRowHTML() {
+  if (!addRowOpen) {
+    return `<tr class="addrow-trigger"><td colspan="${NUM_COLS}"><button class="ar-trigger" id="ar-open">＋ New activity</button></td></tr>`;
+  }
   return `<tr class="addrow">
-    <td><button class="ar-add" id="ar-add" title="Add (Enter)">＋</button></td>
-    <td><input id="ar-title" placeholder="New activity… (English)"></td>
+    <td><div class="ar-actions"><button class="ar-add" id="ar-add" title="Save (Enter)">✓</button><button class="ar-cancel" id="ar-cancel" title="Cancel">✕</button></div></td>
+    <td><input id="ar-title" placeholder="Activity title… (English)" autofocus></td>
     <td><select id="ar-type">${selOpts(typeOptions(), '')}</select></td>
     <td><select id="ar-prod">${selOpts(productOptions(), '')}</select></td>
     <td><select id="ar-sector">${selOpts(sectorOptions(), '')}</select></td>
     <td><span class="muted">today</span></td>
     <td><input id="ar-due" type="date"></td>
+    <td><span class="muted">—</span></td>
     <td><select id="ar-prio">${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}" ${k === 'medium' ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
     <td><span class="muted">0%</span></td>
     <td><select id="ar-status">${Object.entries(STATUSES).map(([k, v]) => `<option value="${k}" ${k === 'todo' ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
@@ -257,8 +269,7 @@ function commitAddRow() {
   if (!title) { g('ar-title').focus(); toast('Type the activity title first'); return; }
   const obj = { id: uid(), num: nextNum(), title, description: '', requester: '', product: g('ar-prod').value.trim(), type: g('ar-type').value, sector: g('ar-sector').value, source: '', project: '', deadline: g('ar-due').value, priority: g('ar-prio').value, status: g('ar-status').value, progress: 0, hours: 0, blockers: '', notes: '', contacts: [], createdAt: new Date().toISOString(), completedAt: null };
   if (obj.status === 'done') { obj.completedAt = new Date().toISOString(); obj.progress = 100; }
-  tasks.push(obj); saveTasks();
-  setTimeout(() => { const el = document.getElementById('ar-title'); if (el) el.focus(); }, 0);
+  tasks.unshift(obj); addRowOpen = false; saveTasks();
   toast('Activity added ✓');
 }
 function renderTable() {
@@ -271,16 +282,25 @@ function renderTable() {
     if (sortCol === 'num') { va = a.num || 0; vb = b.num || 0; }
     if (sortCol === 'deadline') { va = parseDate(a.deadline) ? parseDate(a.deadline).getTime() : 9e15; vb = parseDate(b.deadline) ? parseDate(b.deadline).getTime() : 9e15; }
     if (sortCol === 'createdAt') { va = new Date(a.createdAt || 0).getTime(); vb = new Date(b.createdAt || 0).getTime(); }
+    if (sortCol === 'daysLeft') { va = relDays(a.deadline) ?? 9999; vb = relDays(b.deadline) ?? 9999; }
     if (typeof va === 'string') va = va.toLowerCase();
     if (typeof vb === 'string') vb = vb.toLowerCase();
     return (va < vb ? -1 : va > vb ? 1 : 0) * sortDir;
   });
   const head = `<thead><tr>${COLS.map(c => `<th data-sort="${c.k}">${c.l}${sortCol === c.k ? ` <span class="ar">${sortDir > 0 ? '▲' : '▼'}</span>` : ''}</th>`).join('')}</tr></thead>`;
   let body;
-  if (!arr.length) { body = `<tr><td colspan="10"><div class="empty"><div class="big">Nothing here</div><div>${tasks.length ? 'No tasks match this filter.' : 'Add your first activity in the row below — in English. ✍️'}</div></div></td></tr>`; }
+  if (!arr.length) { body = `<tr><td colspan="${NUM_COLS}"><div class="empty"><div class="big">Nothing here</div><div>${tasks.length ? 'No tasks match this filter.' : 'Click "+ New activity" below to get started. ✍️'}</div></div></td></tr>`; }
   else body = arr.map(t => {
     const r = relDays(t.deadline); let dcls = '';
     if (t.status !== 'done') { if (r < 0) dcls = 'over'; else if (r !== null && r <= 2) dcls = 'soon'; }
+    const daysCell = t.status === 'done'
+      ? `<span class="badge b-done" style="font-size:10px">done</span>`
+      : r === null ? `<span style="color:var(--txt-faint)">—</span>`
+      : r < 0 ? `<span class="due over">${-r}d late</span>`
+      : r === 0 ? `<span class="due soon">today</span>`
+      : r === 1 ? `<span class="due soon">tomorrow</span>`
+      : r <= 7 ? `<span class="due soon">${r}d</span>`
+      : `<span style="color:var(--txt-dim);font-family:var(--mono);font-size:11.5px">${r}d</span>`;
     return `<tr data-open="${t.id}">
       <td class="idcell">${t.num || ''}</td>
       <td class="${t.status === 'done' ? 'done' : ''}"><div class="tt"><span class="prio-bar prio-${t.priority}" style="height:16px"></span>${esc(t.title) || 'untitled'} ${replyBadge(t)}</div></td>
@@ -289,14 +309,31 @@ function renderTable() {
       <td>${t.sector ? `<span style="color:var(--txt-dim);font-size:12px">${esc(t.sector)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
       <td class="mono" style="color:var(--txt-faint);font-size:11.5px">${fmtDate((t.createdAt || '').slice(0, 10))}</td>
       <td><span class="due ${dcls}">${fmtDate(t.deadline)}</span></td>
-      <td><span class="badge" style="background:var(--line);color:var(--txt-dim)">${PRIOS[t.priority]}</span></td>
+      <td>${daysCell}</td>
+      <td><span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span></td>
       <td><div data-iprog="${t.id}" class="prog-cell" title="Click to edit"><span class="minibar"><i style="width:${t.progress || 0}%"></i></span><span class="mono" style="font-size:11px;color:var(--txt-dim)">${t.progress || 0}%</span></div></td>
       <td><div data-istat="${t.id}" class="stat-cell" title="Click to change"><span class="badge b-${t.status}">${STATUSES[t.status]}</span><span style="color:var(--txt-faint);font-size:10px;margin-left:2px">▾</span></div></td>
     </tr>`;
   }).join('');
   document.getElementById('tbl').innerHTML = head + `<tbody>${body}${addRowHTML()}</tbody>`;
+  const aopen = document.getElementById('ar-open'); if (aopen) aopen.onclick = () => { addRowOpen = true; renderTable(); setTimeout(() => { const t = document.getElementById('ar-title'); if (t) t.focus(); }, 0); };
   const ab = document.getElementById('ar-add'); if (ab) ab.onclick = commitAddRow;
-  const at = document.getElementById('ar-title'); if (at) at.addEventListener('keydown', e => { if (e.key === 'Enter') commitAddRow(); });
+  const acan = document.getElementById('ar-cancel'); if (acan) acan.onclick = () => { addRowOpen = false; renderTable(); };
+  const at = document.getElementById('ar-title'); if (at) at.addEventListener('keydown', e => { if (e.key === 'Enter') commitAddRow(); if (e.key === 'Escape') { addRowOpen = false; renderTable(); } });
+}
+
+// ── CUSTOM CONFIRM ────────────────────────────────────────────────────────────
+function customConfirm(msg, { yes = 'Confirm', no = 'Cancel', danger = true } = {}) {
+  return new Promise(resolve => {
+    const wrap = document.createElement('div');
+    wrap.className = 'cscrim';
+    wrap.innerHTML = `<div class="cbox"><div class="cmsg">${msg}</div><div class="cbtns"><button class="btn ghost csm cno">${no}</button><button class="btn ${danger ? 'danger' : 'primary'} csm cyes">${yes}</button></div></div>`;
+    document.body.appendChild(wrap);
+    const close = v => { wrap.remove(); resolve(v); };
+    wrap.querySelector('.cyes').onclick = () => close(true);
+    wrap.querySelector('.cno').onclick = () => close(false);
+    wrap.onclick = e => { if (e.target === wrap) close(false); };
+  });
 }
 
 // ── MUTATIONS ─────────────────────────────────────────────────────────────────
@@ -350,7 +387,7 @@ function openModal(task) {
   document.getElementById('f-prog').oninput = e => document.getElementById('pv').textContent = e.target.value;
   document.getElementById('f-prio').addEventListener('change', () => prioTouched = true);
   const md = document.getElementById('mDel');
-  if (md) md.onclick = async () => { if (confirm('Delete this task?')) { tasks = tasks.filter(x => x.id !== t.id); await saveTasks(); close(); toast('Deleted'); } };
+  if (md) md.onclick = async () => { if (await customConfirm('Delete this task?', { yes: 'Delete', no: 'Cancel', danger: true })) { tasks = tasks.filter(x => x.id !== t.id); await saveTasks(); close(); toast('Deleted'); } };
 
   function renderContacts() {
     const el = document.getElementById('contactList');
@@ -446,7 +483,7 @@ function renderMetrics() {
   const now = new Date();
   const curAbsM = now.getFullYear() * 12 + now.getMonth();
   const toKey = a => { const y = Math.floor(a / 12), m = a % 12; return y + '-' + String(m + 1).padStart(2, '0'); };
-  const toLbl = (key, isCur, isNext) => new Date(key + '-01').toLocaleDateString('en-US', { month: 'short' }) + (isCur ? ' ●' : isNext ? ' →' : '');
+  const toLbl = (key, isCur, isNext) => { const [y, m] = key.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short' }) + (isCur ? ' ●' : isNext ? ' →' : ''); };
   // Collect past months (up to 4) that actually have deadline or completion data
   const pastKeys = [];
   for (let i = 12; i >= 1 && pastKeys.length < 4; i--) {
@@ -551,10 +588,10 @@ function openProductDetail(name) {
   document.getElementById('pd-ca').onclick = () => { const inp2 = document.getElementById('pd-ci'); const text = inp2.value.trim(); if (!text) return; checklist.push({ text, done: false }); inp2.value = ''; renderChecklist(); };
   document.getElementById('pd-ci').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('pd-ca').click(); });
   document.getElementById('pd-save').onclick = () => { settings.productData = settings.productData || {}; settings.productData[name] = { notes: document.getElementById('pd-notes').value.trim(), checklist }; sset('settings', settings); close(); toast('Saved ✓'); };
-  document.getElementById('pd-del').onclick = () => {
+  document.getElementById('pd-del').onclick = async () => {
     const tagged = tasks.filter(t => t.product === name);
-    const tagMsg = tagged.length ? `\n\n${tagged.length} task(s) are tagged with this product — they will be UNTAGGED (not deleted).` : '';
-    if (confirm(`Delete "${name}"?${tagMsg}\n\nThis cannot be undone.`)) {
+    const tagMsg = tagged.length ? `<br><br><span style="color:var(--txt-dim);font-size:13px">${tagged.length} task(s) tagged with this product will be <b>untagged</b> (not deleted).</span>` : '';
+    if (await customConfirm(`Delete <b>${esc(name)}</b>?${tagMsg}`, { yes: 'Delete', no: 'Cancel', danger: true })) {
       settings.products = (settings.products || []).filter(p => p !== name);
       if (settings.productData) delete settings.productData[name];
       if (tagged.length) { tasks.forEach(t => { if (t.product === name) t.product = ''; }); sset('tasks', tasks); }
@@ -675,7 +712,7 @@ function renderSettings() {
 
 // ── EXPORT / IMPORT ───────────────────────────────────────────────────────────
 function doExport() { const blob = new Blob([JSON.stringify({ tasks, vocab, ideas, settings, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'polaris-backup-' + todayStr() + '.json'; a.click(); toast('Backup downloaded ⬇︎'); }
-function doImport(file) { const r = new FileReader(); r.onload = async () => { try { const d = JSON.parse(r.result); if (!confirm('Import will replace your current data. Continue?')) return; tasks = d.tasks || []; vocab = d.vocab || []; ideas = d.ideas || []; if (d.settings) settings = { ...DEFAULTS, ...d.settings }; await sset('tasks', tasks); await sset('vocab', vocab); await sset('ideas', ideas); await sset('settings', settings); refreshAll(); toast('Backup restored ✓'); } catch(e) { toast('Invalid backup file'); } }; r.readAsText(file); }
+function doImport(file) { const r = new FileReader(); r.onload = async () => { try { const d = JSON.parse(r.result); if (!await customConfirm('Import will replace all current data.\nThis cannot be undone.', { yes: 'Import', no: 'Cancel', danger: true })) return; tasks = d.tasks || []; vocab = d.vocab || []; ideas = d.ideas || []; if (d.settings) settings = { ...DEFAULTS, ...d.settings }; await sset('tasks', tasks); await sset('vocab', vocab); await sset('ideas', ideas); await sset('settings', settings); refreshAll(); toast('Backup restored ✓'); } catch(e) { toast('Invalid backup file'); } }; r.readAsText(file); }
 
 // ── INLINE PICKERS ────────────────────────────────────────────────────────────
 function showStatusPicker(id, anchorEl) {
@@ -740,6 +777,7 @@ function toast(m) { const el = document.getElementById('toast'); el.textContent 
 document.addEventListener('click', e => {
   const nav = e.target.closest('.nav-item'); if (nav) { show(nav.dataset.tab); return; }
   const f = e.target.closest('[data-f]'); if (f) { filter = f.dataset.f; renderFilters(); renderTable(); return; }
+  const sq = e.target.closest('[data-sq]'); if (sq) { const [col, dir] = sq.dataset.sq.split(':'); sortCol = col; sortDir = parseInt(dir); renderFilters(); renderTable(); return; }
   const bf = e.target.closest('[data-bf]'); if (bf) { boardFilter = bf.dataset.bf; renderBoard(); return; }
   const mp = e.target.closest('[data-mp]'); if (mp) { metricPeriod = mp.dataset.mp; renderMetrics(); return; }
   const th = e.target.closest('th[data-sort]'); if (th) { const c = th.dataset.sort; if (sortCol === c) sortDir *= -1; else { sortCol = c; sortDir = 1; } renderTable(); return; }
