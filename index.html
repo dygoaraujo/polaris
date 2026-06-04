@@ -772,7 +772,7 @@ function renderIdeas(){document.getElementById('ideaGrid').innerHTML=`<div class
   const add=document.getElementById('ideaAdd');if(add)add.onclick=async()=>{const t=document.getElementById('ideaT').value.trim(),b=document.getElementById('ideaB').value.trim();if(!t&&!b){toast('Write something first');return;}ideas.unshift({id:uid(),title:t,body:b,createdAt:new Date().toISOString()});await saveIdeas();toast('Idea saved 💡');};}
 
 /* SETTINGS */
-function pillHTML(field,i,v){return `<span class=”pill” draggable=”true” data-pfield=”${field}” data-pidx=”${i}”><span class=”drag-h” title=”Drag to reorder”>⠿</span><span class=”pill-lbl” data-pedit=”${field}:${i}” title=”Click to rename”>${esc(v)}</span><button data-rem=”${field}:${i}” title=”Remove”>✕</button></span>`;}
+function pillHTML(field,i,v){return `<span class=”pill” draggable=”true” data-pfield=”${field}” data-pidx=”${i}”><span class=”drag-h” title=”Drag to reorder”>&#8942;&#8942;</span><span class=”pill-lbl” data-pedit=”${field}:${i}” title=”Click to rename”>${esc(v)}</span><button data-rem=”${field}:${i}” title=”Remove”>✕</button></span>`;}
 
 function renderSettings(){
   const listPanel=(title,desc,field)=>`<div class=”set-panel”><h4>${title}</h4><div class=”sd”>${desc} <span style=”color:var(--txt-faint);font-size:11.5px”>— drag to reorder · click name to rename</span></div><div class=”pills” id=”pills-${field}”>${(settings[field]||[]).map((v,i)=>pillHTML(field,i,v)).join('')||'<span style=”color:var(--txt-faint);font-size:13px”>None yet.</span>'}</div><div class=”addline”><input id=”add-${field}” placeholder=”Add new…”><button class=”btn sm primary” data-add=”${field}”>Add</button></div></div>`;
