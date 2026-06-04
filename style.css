@@ -57,6 +57,9 @@ button{font-family:inherit;cursor:pointer}input,textarea,select{font-family:inhe
 .b-todo{background:var(--line);color:var(--txt-dim)}.b-in_progress{background:var(--blue-soft);color:var(--blue)}.b-blocked{background:var(--red-soft);color:var(--red)}.b-done{background:var(--green-soft);color:var(--green)}
 .tag{font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:var(--teal);background:var(--teal-soft);padding:1px 7px;border-radius:5px}
 .tag.type{color:var(--violet);background:var(--violet-soft)}
+.sec-tag{font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:var(--green);background:var(--green-soft);padding:1px 7px;border-radius:5px}
+.prio-tag{font-family:var(--mono);font-size:10px;letter-spacing:.04em;padding:1px 7px;border-radius:5px;font-weight:600}
+.prio-tag.prio-urgent{background:var(--red-soft);color:var(--red)}.prio-tag.prio-high{background:var(--amber-soft);color:var(--amber)}.prio-tag.prio-medium{background:var(--blue-soft);color:var(--blue)}.prio-tag.prio-low{background:var(--line);color:var(--txt-faint)}
 .src{font-family:var(--mono);font-size:10px;letter-spacing:.04em;padding:1px 7px;border-radius:5px;font-weight:600;background:var(--line);color:var(--txt-dim)}
 .src-Director{background:var(--red-soft);color:var(--red)}.src-Coordinator{background:var(--amber-soft);color:var(--amber)}
 .due{font-family:var(--mono);font-size:11.5px;padding:2px 8px;border-radius:6px;background:var(--line);color:var(--txt-dim)}
@@ -141,6 +144,8 @@ tbody tr{border-bottom:1px solid var(--line-soft);cursor:pointer;transition:.1s}
 td .tt{font-weight:600;display:flex;align-items:center;gap:9px}td.done .tt{text-decoration:line-through;color:var(--txt-dim)}
 td .sub{font-size:11px;color:var(--txt-faint);margin-top:2px}
 .minibar{width:60px;height:7px;background:var(--line);border-radius:5px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:7px}.minibar i{display:block;height:100%;background:var(--accent)}
+.stat-cell,.prog-cell{display:inline-flex;align-items:center;gap:4px;cursor:pointer;border-radius:6px;padding:2px 5px;transition:.12s;margin:-2px -5px}
+.stat-cell:hover,.prog-cell:hover{background:var(--line-soft)}
 .empty{text-align:center;padding:50px 20px;color:var(--txt-faint)}.empty .big{font-family:var(--display);font-size:19px;color:var(--txt-dim);margin-bottom:6px}
 
 /* MODAL */
@@ -208,6 +213,18 @@ td .sub{font-size:11px;color:var(--txt-faint);margin-top:2px}
 .distro .lab{width:130px;color:var(--txt-dim);flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .distro .track{flex:1;height:9px;background:var(--line-soft);border-radius:6px;overflow:hidden}.distro .fill{height:100%;border-radius:6px}
 .distro .num{font-family:var(--mono);font-size:12px;width:28px;text-align:right;color:var(--txt-dim)}
+
+/* INLINE PICKER */
+.inline-picker{animation:pop .15s ease}
+
+/* PRODUCT DETAIL */
+.prod-detail-stats{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--txt-dim);padding:10px 0;border-bottom:1px solid var(--line-soft);margin-bottom:14px}
+.prod-detail-stats b{color:var(--txt);font-family:var(--mono)}
+.pd-check-item{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--line-soft)}
+.pd-check-item:last-child{border-bottom:0}
+.pd-check-item input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px;flex:none;cursor:pointer}
+.pd-check-item span{flex:1;font-size:14px}
+.pd-check-item span.done{text-decoration:line-through;color:var(--txt-dim)}
 
 /* PRODUCTS */
 .prod-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
