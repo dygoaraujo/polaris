@@ -158,7 +158,7 @@ function frow(t) {
     <div class="chk" data-toggle-done="${t.id}">✓</div>
     <div class="prio-bar prio-${t.priority}" style="height:30px"></div>
     <div class="ftitle">${esc(t.title) || '<i style="color:var(--txt-faint)">untitled</i>'}
-      <div class="fmeta">${t.type ? `<span class="tag type">${esc(t.type)}</span>` : ''}${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}${replyBadge(t)}${due}</div>
+      <div class="fmeta">${t.type ? `<span class="tag type">${esc(t.type)}</span>` : ''}${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}${t.sector ? `<span class="tag sec-tag">${esc(t.sector)}</span>` : ''}${t.priority ? `<span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span>` : ''}${replyBadge(t)}${due}</div>
     </div>
     <button class="star ${starred ? 'on' : ''}" data-star="${t.id}" title="Set as today's focus">${starred ? '★' : '☆'}</button>
   </div>`;
@@ -210,7 +210,7 @@ function renderBoardFilters() { document.getElementById('boardFilters').innerHTM
 function renderBoard() {
   renderBoardFilters();
   const cols = [['todo', 'To do'], ['in_progress', 'In progress'], ['blocked', 'Blocked'], ['done', 'Done']];
-  const card = t => `<div class="kcard pl-${t.priority}" draggable="true" data-card="${t.id}"><div class="kt">${esc(t.title) || 'untitled'}</div><div class="km">${t.deadline ? `<span class="due ${t.status !== 'done' && relDays(t.deadline) < 0 ? 'over' : (t.status !== 'done' && relDays(t.deadline) <= 2 ? 'soon' : '')}">${fmtDate(t.deadline)}</span>` : ''}${t.type ? `<span class="tag type">${esc(t.type)}</span>` : ''}${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}${replyBadge(t)}</div>${t.progress ? `<div class="kmini"><i style="width:${t.progress}%"></i></div>` : ''}</div>`;
+  const card = t => `<div class="kcard pl-${t.priority}" draggable="true" data-card="${t.id}"><div class="kt">${esc(t.title) || 'untitled'}</div><div class="km">${t.deadline ? `<span class="due ${t.status !== 'done' && relDays(t.deadline) < 0 ? 'over' : (t.status !== 'done' && relDays(t.deadline) <= 2 ? 'soon' : '')}">${fmtDate(t.deadline)}</span>` : ''}${t.type ? `<span class="tag type">${esc(t.type)}</span>` : ''}${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}${t.sector ? `<span class="tag sec-tag">${esc(t.sector)}</span>` : ''}${t.priority ? `<span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span>` : ''}${replyBadge(t)}</div>${t.progress ? `<div class="kmini"><i style="width:${t.progress}%"></i></div>` : ''}</div>`;
   document.getElementById('board').innerHTML = cols.map(([k, label]) => {
     const items = tasks.filter(t => t.status === k && boardMatch(t, boardFilter) && matchSearch(t)).sort((a, b) => { const o = { urgent: 0, high: 1, medium: 2, low: 3 }; const ra = relDays(a.deadline), rb = relDays(b.deadline); if (ra !== rb) { if (ra === null) return 1; if (rb === null) return -1; return ra - rb; } return o[a.priority] - o[b.priority]; });
     const warn = k === 'in_progress' && items.length > 5 ? 'warn' : '';
@@ -283,15 +283,15 @@ function renderTable() {
     if (t.status !== 'done') { if (r < 0) dcls = 'over'; else if (r !== null && r <= 2) dcls = 'soon'; }
     return `<tr data-open="${t.id}">
       <td class="idcell">${t.num || ''}</td>
-      <td class="${t.status === 'done' ? 'done' : ''}"><div class="tt"><span class="prio-bar prio-${t.priority}" style="height:16px"></span>${esc(t.title) || 'untitled'} ${replyBadge(t)}</div>${t.project ? `<div class="sub">📁 ${esc(t.project)}</div>` : ''}</td>
+      <td class="${t.status === 'done' ? 'done' : ''}"><div class="tt"><span class="prio-bar prio-${t.priority}" style="height:16px"></span>${esc(t.title) || 'untitled'} ${replyBadge(t)}</div></td>
       <td>${t.type ? `<span class="tag type">${esc(t.type)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
       <td>${t.product ? `<span class="tag">${esc(t.product)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
       <td>${t.sector ? `<span style="color:var(--txt-dim);font-size:12px">${esc(t.sector)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
       <td class="mono" style="color:var(--txt-faint);font-size:11.5px">${fmtDate((t.createdAt || '').slice(0, 10))}</td>
       <td><span class="due ${dcls}">${fmtDate(t.deadline)}</span></td>
       <td><span class="badge" style="background:var(--line);color:var(--txt-dim)">${PRIOS[t.priority]}</span></td>
-      <td><span class="minibar"><i style="width:${t.progress || 0}%"></i></span><span class="mono" style="font-size:11px;color:var(--txt-dim)">${t.progress || 0}%</span></td>
-      <td><span class="badge b-${t.status}">${STATUSES[t.status]}</span></td>
+      <td><div data-iprog="${t.id}" class="prog-cell" title="Click to edit"><span class="minibar"><i style="width:${t.progress || 0}%"></i></span><span class="mono" style="font-size:11px;color:var(--txt-dim)">${t.progress || 0}%</span></div></td>
+      <td><div data-istat="${t.id}" class="stat-cell" title="Click to change"><span class="badge b-${t.status}">${STATUSES[t.status]}</span><span style="color:var(--txt-faint);font-size:10px;margin-left:2px">▾</span></div></td>
     </tr>`;
   }).join('');
   document.getElementById('tbl').innerHTML = head + `<tbody>${body}${addRowHTML()}</tbody>`;
@@ -329,16 +329,12 @@ function openModal(task) {
         <div class="field"><label>Product</label><input id="f-prod" value="${esc(t.product)}" placeholder="e.g. P-204 Pump" list="prodlist"><datalist id="prodlist">${productOptions().map(p => `<option value="${esc(p)}">`).join('')}</datalist></div>
         <div class="field"><label>Sector</label><select id="f-sector">${selOpts(sectorOptions(), t.sector)}</select></div>
       </div>
-      <div class="field"><label>Project / sprint</label><input id="f-project" value="${esc(t.project)}" placeholder="Optional" list="projlist"><datalist id="projlist">${projectOptions().map(p => `<option value="${esc(p)}">`).join('')}</datalist></div>
       <div class="row3">
         <div class="field"><label>Deadline</label><input id="f-due" type="date" value="${t.deadline || ''}"></div>
         <div class="field"><label>Priority</label><select id="f-prio">${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}" ${t.priority === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
         <div class="field"><label>Status</label><select id="f-status">${Object.entries(STATUSES).map(([k, v]) => `<option value="${k}" ${t.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
       </div>
-      <div class="row2">
-        <div class="field"><label>Requested by (person)</label><input id="f-req" value="${esc(t.requester)}" placeholder="Optional"></div>
-        <div class="field"><label>Hours logged</label><input id="f-hours" type="number" min="0" step="0.5" value="${t.hours || 0}"></div>
-      </div>
+      <div class="field" style="max-width:200px"><label>Hours logged</label><input id="f-hours" type="number" min="0" step="0.5" value="${t.hours || 0}"></div>
       <div class="field"><label>Progress — <span id="pv">${t.progress || 0}</span>%</label><div class="prog-row"><input id="f-prog" type="range" min="0" max="100" step="5" value="${t.progress || 0}"></div></div>
       <div class="field"><label>Blocked by (optional)</label><input id="f-block" value="${esc(t.blockers)}" placeholder="What's stopping it?"></div>
       <div class="field"><label>Notes &amp; drafts</label><textarea id="f-notes" placeholder="Scratch notes, links, sub-steps…">${esc(t.notes)}</textarea></div>
@@ -386,7 +382,7 @@ function openModal(task) {
 
   document.getElementById('mSave').onclick = async () => {
     const v = id => document.getElementById(id).value;
-    const obj = { id: t.id || uid(), title: v('f-title').trim(), description: v('f-desc').trim(), requester: v('f-req').trim(), product: v('f-prod').trim(), type: v('f-type'), sector: v('f-sector'), source: t.source || '', project: v('f-project').trim(), deadline: v('f-due'), priority: v('f-prio'), status: v('f-status'), progress: parseInt(v('f-prog')) || 0, hours: parseFloat(v('f-hours')) || 0, blockers: v('f-block').trim(), notes: v('f-notes').trim(), contacts: clog, createdAt: t.createdAt || new Date().toISOString(), completedAt: t.completedAt || null };
+    const obj = { id: t.id || uid(), num: t.num || nextNum(), title: v('f-title').trim(), description: v('f-desc').trim(), requester: t.requester || '', product: v('f-prod').trim(), type: v('f-type'), sector: v('f-sector'), source: t.source || '', project: t.project || '', deadline: v('f-due'), priority: v('f-prio'), status: v('f-status'), progress: parseInt(v('f-prog')) || 0, hours: parseFloat(v('f-hours')) || 0, blockers: v('f-block').trim(), notes: v('f-notes').trim(), contacts: clog, createdAt: t.createdAt || new Date().toISOString(), completedAt: t.completedAt || null };
     if (obj.status === 'done') { if (!obj.completedAt) obj.completedAt = new Date().toISOString(); obj.progress = 100; }
     if (obj.progress >= 100 && obj.status !== 'done') { obj.status = 'done'; obj.completedAt = new Date().toISOString(); }
     if (!obj.title && !obj.description) { toast('Add at least a title'); return; }
@@ -439,7 +435,7 @@ function renderFlash() {
 
 // ── METRICS ───────────────────────────────────────────────────────────────────
 function periodRange(p) { const t = today(); if (p === 'today') return [t, new Date(t.getTime() + DAY)]; if (p === 'week') return weekRange(0); if (p === 'month') return [new Date(t.getFullYear(), t.getMonth(), 1), new Date(t.getFullYear(), t.getMonth() + 1, 1)]; return null; }
-function metricIn(t) { if (metricPeriod === 'total') return true; const [a, b] = periodRange(metricPeriod); const inR = d => { if (!d) return false; const x = startOfDay(d); return x >= a && x < b; }; return inR(t.createdAt) || inR(t.completedAt); }
+function metricIn(t) { if (metricPeriod === 'total') return true; const [a, b] = periodRange(metricPeriod); const inR = d => { if (!d) return false; const s = typeof d === 'string' && !d.includes('T') ? d + 'T00:00:00' : d; const x = startOfDay(new Date(s)); return x >= a && x < b; }; return inR(t.deadline) || inR(t.completedAt) || inR(t.createdAt); }
 function groupCount(arr, field) { const m = {}; arr.forEach(t => { const v = (t[field] || '').trim() || '(none)'; m[v] = (m[v] || 0) + 1; }); return Object.entries(m).map(([label, n]) => ({ label, n })).sort((a, b) => b.n - a.n); }
 function renderMetricChips() { const P = [['today', 'Today'], ['week', 'This week'], ['month', 'This month'], ['total', 'Total']]; document.getElementById('metricChips').innerHTML = P.map(([k, l]) => `<button class="chip ${metricPeriod === k ? 'on' : ''}" data-mp="${k}">${l}</button>`).join(''); }
 function renderMetrics() {
@@ -448,7 +444,7 @@ function renderMetrics() {
   const total = mt.length, done = mt.filter(t => t.status === 'done').length, rate = total ? Math.round(done / total * 100) : 0;
   const hours = mt.reduce((s, t) => s + (+t.hours || 0), 0);
   const months = []; const now = new Date(); for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push(d.toISOString().slice(0, 7)); }
-  const prog = months.map(m => tasks.filter(t => (t.createdAt || '').slice(0, 7) === m).length);
+  const prog = months.map(m => tasks.filter(t => (t.deadline || '').slice(0, 7) === m).length);
   const compl = months.map(m => tasks.filter(t => (t.completedAt || '').slice(0, 7) === m).length);
   const maxv = Math.max(1, ...prog, ...compl);
   const labels = months.map(m => new Date(m + '-01').toLocaleDateString('en-US', { month: 'short' }));
@@ -480,19 +476,78 @@ function renderMetrics() {
 // ── PRODUCTS ──────────────────────────────────────────────────────────────────
 function renderProducts() {
   const names = uniq([...(settings.products || []), ...tasks.map(t => t.product).filter(Boolean)]);
-  const withTasks = names.filter(n => tasks.some(t => t.product === n));
   const grid = document.getElementById('prodGrid');
-  if (!withTasks.length) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="big">No products yet</div><div>Tag tasks with a product, or start a project from the template above.</div></div>`; return; }
-  grid.innerHTML = withTasks.map(n => {
+  if (!names.length) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="big">No products yet</div><div>Type a name above and click "＋ Add product".</div></div>`; return; }
+  grid.innerHTML = names.map(n => {
     const its = tasks.filter(t => t.product === n);
     const done = its.filter(t => t.status === 'done').length;
     const hours = its.reduce((s, t) => s + (+t.hours || 0), 0);
     const pct = its.length ? Math.round(done / its.length * 100) : 0;
     const last = its.map(t => t.completedAt || t.createdAt).filter(Boolean).sort().slice(-1)[0];
     const lastTxt = last ? new Date(last).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
-    const list = its.slice().sort((a, b) => (a.status === 'done') - (b.status === 'done')).map(t => `<div class="pli ${t.status === 'done' ? 'done' : ''}" data-open="${t.id}"><span class="prio-bar prio-${t.priority}" style="height:16px"></span><span class="pt2">${esc(t.title)}</span><span class="badge b-${t.status}">${STATUSES[t.status]}</span></div>`).join('');
-    return `<div class="prodcard"><div class="ph"><div class="pn">${esc(n)}</div><div class="pstats"><span><b>${its.length}</b> activities</span><span><b>${done}</b> done</span><span><b>${hours}</b>h</span><span>last: <b>${lastTxt}</b></span></div><div class="pprog"><i style="width:${pct}%"></i></div></div><div class="pl">${list}</div></div>`;
+    const list = its.length
+      ? its.slice().sort((a, b) => (a.status === 'done') - (b.status === 'done')).map(t => `<div class="pli ${t.status === 'done' ? 'done' : ''}" data-open="${t.id}"><span class="prio-bar prio-${t.priority}" style="height:16px"></span><span class="pt2">${esc(t.title)}</span><span class="badge b-${t.status}">${STATUSES[t.status]}</span></div>`).join('')
+      : `<div style="color:var(--txt-faint);font-size:13px;padding:8px 4px">No tasks yet. Add a task and tag it with this product.</div>`;
+    return `<div class="prodcard"><div class="ph" data-prod="${esc(n)}" title="Open details" style="cursor:pointer"><div class="pn">${esc(n)}</div><div class="pstats"><span><b>${its.length}</b> activities</span><span><b>${done}</b> done</span><span><b>${hours}</b>h</span>${its.length ? `<span>last: <b>${lastTxt}</b></span>` : ''}</div><div class="pprog"><i style="width:${pct}%"></i></div></div><div class="pl">${list}</div></div>`;
   }).join('');
+}
+function createBlankProduct() {
+  const inp = document.getElementById('projName');
+  const name = inp.value.trim(); if (!name) { toast('Type a product name first'); return; }
+  if (!settings.products) settings.products = [];
+  if (settings.products.includes(name)) { toast(`"${name}" already exists`); return; }
+  settings.products.push(name);
+  sset('settings', settings); inp.value = ''; renderProducts();
+  toast(`Product "${name}" added ✓`);
+}
+function openProductDetail(name) {
+  const its = tasks.filter(t => t.product === name);
+  const done = its.filter(t => t.status === 'done').length;
+  const hours = its.reduce((s, t) => s + (+t.hours || 0), 0);
+  const pct = its.length ? Math.round(done / its.length * 100) : 0;
+  settings.productData = settings.productData || {};
+  const pd = settings.productData[name] || { notes: '', checklist: [] };
+  let checklist = JSON.parse(JSON.stringify(pd.checklist || []));
+  const taskList = its.length
+    ? its.slice().sort((a, b) => (a.status === 'done') - (b.status === 'done')).map(t => `<div class="frow" data-open="${t.id}" style="margin-bottom:6px"><div class="prio-bar prio-${t.priority}" style="height:24px"></div><div class="ftitle">${esc(t.title)}<div class="fmeta"><span class="badge b-${t.status}">${STATUSES[t.status]}</span>${t.deadline ? `<span class="due">${fmtDate(t.deadline)}</span>` : ''}</div></div></div>`).join('')
+    : `<div style="color:var(--txt-faint);font-size:13px">No tasks yet.</div>`;
+  modalHost.innerHTML = `<div class="scrim" id="scrim"><div class="modal" onclick="event.stopPropagation()">
+    <div class="mhead"><h3>📦 ${esc(name)}</h3><button class="xclose" id="mClose">✕</button></div>
+    <div class="mbody">
+      <div class="prod-detail-stats"><span><b>${its.length}</b> activities</span><span><b>${done}</b> done</span><span><b>${hours}h</b> logged</span><span><b>${pct}%</b> complete</span></div>
+      <div class="pprog" style="margin-bottom:16px"><i style="width:${pct}%"></i></div>
+      <div class="field"><label>Notes</label><textarea id="pd-notes" style="min-height:80px">${esc(pd.notes || '')}</textarea></div>
+      <div class="subhead">✅ Checklist</div>
+      <div id="pd-checklist" style="margin-bottom:4px"></div>
+      <div class="addline" style="margin-bottom:8px"><input id="pd-ci" placeholder="Add checklist item…"><button class="btn sm primary" id="pd-ca">＋ Add</button></div>
+      <div class="subhead">📋 Activities (${its.length})</div>
+      ${taskList}
+    </div>
+    <div class="mfoot"><button class="btn danger sm" id="pd-del">🗑 Delete product</button><div style="display:flex;gap:10px"><button class="btn ghost" id="mCancel">Cancel</button><button class="btn primary" id="pd-save">Save notes</button></div></div>
+  </div></div>`;
+  const close = () => { modalHost.innerHTML = ''; renderProducts(); };
+  document.getElementById('scrim').onclick = close;
+  document.getElementById('mClose').onclick = close;
+  document.getElementById('mCancel').onclick = close;
+  function renderChecklist() {
+    document.getElementById('pd-checklist').innerHTML = checklist.length
+      ? checklist.map((item, i) => `<div class="pd-check-item"><input type="checkbox" ${item.done ? 'checked' : ''} data-chi="${i}"><span class="${item.done ? 'done' : ''}">${esc(item.text)}</span><button class="cdel" data-chd="${i}">✕</button></div>`).join('')
+      : `<div style="color:var(--txt-faint);font-size:13px;margin-bottom:8px">No items yet.</div>`;
+    document.querySelectorAll('[data-chi]').forEach(cb => cb.onchange = () => { checklist[+cb.dataset.chi].done = cb.checked; renderChecklist(); });
+    document.querySelectorAll('[data-chd]').forEach(b => b.onclick = () => { checklist.splice(+b.dataset.chd, 1); renderChecklist(); });
+  }
+  renderChecklist();
+  document.getElementById('pd-ca').onclick = () => { const inp2 = document.getElementById('pd-ci'); const text = inp2.value.trim(); if (!text) return; checklist.push({ text, done: false }); inp2.value = ''; renderChecklist(); };
+  document.getElementById('pd-ci').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('pd-ca').click(); });
+  document.getElementById('pd-save').onclick = () => { settings.productData = settings.productData || {}; settings.productData[name] = { notes: document.getElementById('pd-notes').value.trim(), checklist }; sset('settings', settings); close(); toast('Saved ✓'); };
+  document.getElementById('pd-del').onclick = () => {
+    if (confirm(`Remove "${name}" from products? Tasks tagged with it will NOT be deleted.`)) {
+      if (confirm(`Confirmar: remover "${name}" definitivamente?`)) {
+        settings.products = (settings.products || []).filter(p => p !== name);
+        if (settings.productData) delete settings.productData[name]; sset('settings', settings); close(); toast(`"${name}" removed`);
+      }
+    }
+  };
 }
 function createFromTemplate() {
   const inp = document.getElementById('projName');
@@ -530,12 +585,13 @@ function renderDayPanel() {
   const dayTasks = tasks.filter(t => t.deadline === calSel);
   const cur = ex.kind || (kind === 'weekend' ? 'weekend' : 'work');
   const kbtn = (k, l) => `<button class="k ${cur === k ? 'on' : ''}" data-kind="${k}">${l}</button>`;
-  p.innerHTML = `<div class="day-panel"><h4>${dlabel} ${kind === 'weekend' && !ex.kind ? '<span style="font-size:12px;color:var(--txt-faint)">· weekend (off by default)</span>' : ''}</h4>
-    <div class="daykind">${kbtn('work', '💼 Workday')}${kbtn('holiday', '🏖 Holiday')}${kbtn('bridge', '🌉 Bridge')}</div>
-    <div class="field" style="max-width:320px"><label>Label (e.g. Carnival, company event)</label><input id="dayLabel" value="${esc(ex.label || '')}" placeholder="Optional note for this day"></div>
-    <div style="margin-top:14px"><div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--txt-faint);margin-bottom:8px">Deadlines this day (${dayTasks.length})</div>
+  p.innerHTML = `<div class="day-panel"><h4>${dlabel}</h4>
+    <div style="margin-bottom:14px"><div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--txt-faint);margin-bottom:8px">Deadlines this day (${dayTasks.length})</div>
     ${dayTasks.length ? dayTasks.map(t => `<div class="frow" data-open="${t.id}"><div class="prio-bar prio-${t.priority}" style="height:24px"></div><div class="ftitle">${esc(t.title)}<div class="fmeta">${t.type ? `<span class="tag type">${esc(t.type)}</span>` : ''}<span class="badge b-${t.status}">${STATUSES[t.status]}</span></div></div></div>`).join('') : '<div style="color:var(--txt-faint);font-size:13px">Nothing due this day.</div>'}
-    <button class="btn sm" id="dayAdd" style="margin-top:10px">＋ Add task on this day</button></div></div>`;
+    <button class="btn sm" id="dayAdd" style="margin-top:10px">＋ Add task on this day</button></div>
+    <div class="daykind">${kbtn('work', '💼 Workday')}${kbtn('holiday', '🏖 Holiday')}${kbtn('bridge', '🌉 Bridge')}</div>
+    <div class="field" style="max-width:320px;margin-top:8px"><label>Label (e.g. Carnival, company event)</label><input id="dayLabel" value="${esc(ex.label || '')}" placeholder="Optional note for this day"></div>
+    </div>`;
   p.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => { settings.calendar = settings.calendar || {}; const c = settings.calendar[calSel] || {}; settings.calendar[calSel] = { kind: b.dataset.kind, label: c.label || '' }; sset('settings', settings); renderCalendar(); });
   const dl = document.getElementById('dayLabel'); if (dl) dl.onblur = () => { settings.calendar = settings.calendar || {}; const c = settings.calendar[calSel] || {}; settings.calendar[calSel] = { kind: c.kind || cur, label: dl.value.trim() }; sset('settings', settings); renderCalendar(); };
   const da = document.getElementById('dayAdd'); if (da) da.onclick = () => openModal({ id: null, title: '', description: '', requester: '', product: '', type: '', sector: '', source: '', project: '', deadline: calSel, priority: 'medium', progress: 0, status: 'todo', blockers: '', notes: '', hours: 0, contacts: [] });
@@ -569,7 +625,6 @@ function renderSettings() {
     <div class="set-panel"><h4>Your name</h4><div class="sd">Used in the "Good morning" greeting on Today.</div><div class="addline"><input id="set-name" value="${esc(settings.name || '')}" placeholder="Your name"><button class="btn sm primary" id="saveName">Save</button></div></div>
     ${listPanel('Activity types', 'e.g. Project document, Mechanical test, Supplier dealing.', 'types')}
     ${listPanel('Sectors', 'Functional area the work belongs to.', 'sectors')}
-    ${listPanel('Demand sources', 'Who/where it came from.', 'sources')}
     ${listPanel('Products / systems', 'Reference products powering the Products page & metrics.', 'products')}
     ${listPanel('Project template', 'Standard documents created when you start a project.', 'template')}
   </div>
@@ -609,6 +664,44 @@ function renderSettings() {
 function doExport() { const blob = new Blob([JSON.stringify({ tasks, vocab, ideas, settings, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'polaris-backup-' + todayStr() + '.json'; a.click(); toast('Backup downloaded ⬇︎'); }
 function doImport(file) { const r = new FileReader(); r.onload = async () => { try { const d = JSON.parse(r.result); if (!confirm('Import will replace your current data. Continue?')) return; tasks = d.tasks || []; vocab = d.vocab || []; ideas = d.ideas || []; if (d.settings) settings = { ...DEFAULTS, ...d.settings }; await sset('tasks', tasks); await sset('vocab', vocab); await sset('ideas', ideas); await sset('settings', settings); refreshAll(); toast('Backup restored ✓'); } catch(e) { toast('Invalid backup file'); } }; r.readAsText(file); }
 
+// ── INLINE PICKERS ────────────────────────────────────────────────────────────
+function showStatusPicker(id, anchorEl) {
+  document.querySelectorAll('.inline-picker').forEach(p => p.remove());
+  const t = getTask(id); if (!t) return;
+  const r = anchorEl.getBoundingClientRect();
+  const pop = document.createElement('div');
+  pop.className = 'inline-picker';
+  pop.style.cssText = `position:fixed;top:${r.bottom + 4}px;left:${Math.min(r.left, window.innerWidth - 170)}px;z-index:55;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:5px;display:flex;flex-direction:column;gap:3px;min-width:150px;box-shadow:0 10px 30px -8px #000`;
+  pop.innerHTML = Object.entries(STATUSES).map(([k, v]) => `<button data-sv="${k}" style="text-align:left;padding:7px 11px;border-radius:7px;border:0;background:${t.status === k ? 'var(--accent-soft)' : 'transparent'};color:${t.status === k ? 'var(--accent)' : 'var(--txt)'};font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">${v}</button>`).join('');
+  document.body.appendChild(pop);
+  pop.querySelectorAll('[data-sv]').forEach(b => b.onclick = async ev => {
+    ev.stopPropagation(); pop.remove();
+    await inlineEdit(id, 'status', b.dataset.sv);
+    if (current === 'table') renderTable();
+  });
+  const close = ev => { if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('click', close, true); } };
+  setTimeout(() => document.addEventListener('click', close, true), 10);
+}
+function showProgressPicker(id, anchorEl) {
+  document.querySelectorAll('.inline-picker').forEach(p => p.remove());
+  const t = getTask(id); if (!t) return;
+  const r = anchorEl.getBoundingClientRect();
+  const pop = document.createElement('div');
+  pop.className = 'inline-picker';
+  pop.style.cssText = `position:fixed;top:${r.bottom + 4}px;left:${Math.min(r.left, window.innerWidth - 240)}px;z-index:55;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:220px;box-shadow:0 10px 30px -8px #000`;
+  pop.innerHTML = `<div style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--txt-faint);margin-bottom:8px">Progress — <b id="pop-pv" style="color:var(--txt)">${t.progress || 0}</b>%</div><input type="range" id="pop-prog" min="0" max="100" step="5" value="${t.progress || 0}" style="width:100%;accent-color:var(--accent)"><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px"><button id="pop-cancel" class="btn sm ghost">Cancel</button><button id="pop-save" class="btn sm primary">Save</button></div>`;
+  document.body.appendChild(pop);
+  pop.querySelector('#pop-prog').oninput = e => { pop.querySelector('#pop-pv').textContent = e.target.value; };
+  pop.querySelector('#pop-cancel').onclick = ev => { ev.stopPropagation(); pop.remove(); };
+  pop.querySelector('#pop-save').onclick = async ev => {
+    ev.stopPropagation(); const val = parseInt(pop.querySelector('#pop-prog').value); pop.remove();
+    await inlineEdit(id, 'progress', val);
+    if (current === 'table') renderTable();
+  };
+  const close = ev => { if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('click', close, true); } };
+  setTimeout(() => document.addEventListener('click', close, true), 10);
+}
+
 // ── VIEWS / EVENTS ────────────────────────────────────────────────────────────
 function show(view) {
   current = view;
@@ -640,6 +733,9 @@ document.addEventListener('click', e => {
   const star = e.target.closest('[data-star]'); if (star) { e.stopPropagation(); toggleFocus(star.dataset.star); return; }
   const td = e.target.closest('[data-toggle-done]'); if (td) { e.stopPropagation(); const t = getTask(td.dataset.toggleDone); const wasDone = t.status === 'done'; inlineEdit(td.dataset.toggleDone, 'status', wasDone ? 'in_progress' : 'done').then(() => { renderToday(); toast(wasDone ? 'Reopened' : 'Done ✓'); }); return; }
   const dc = e.target.closest('[data-day]'); if (dc && !dc.classList.contains('blank')) { calSel = dc.dataset.day; renderCalendar(); return; }
+  const istat = e.target.closest('[data-istat]'); if (istat) { showStatusPicker(istat.dataset.istat, istat); return; }
+  const iprog = e.target.closest('[data-iprog]'); if (iprog) { showProgressPicker(iprog.dataset.iprog, iprog); return; }
+  const prd = e.target.closest('[data-prod]'); if (prd) { openProductDetail(prd.dataset.prod); return; }
   const op = e.target.closest('[data-open]'); if (op) { openModal(getTask(op.dataset.open)); return; }
   const cy = e.target.closest('[data-cycle]'); if (cy) { const v = vocab.find(x => x.id === cy.dataset.cycle); const seq = ['new', 'learning', 'known']; v.status = seq[(seq.indexOf(v.status) + 1) % 3]; saveVocab(); renderVocab(); updateTabCounts(); return; }
   const ka = e.target.closest('[data-kadd]'); if (ka) { openModal({ id: null, title: '', description: '', requester: '', product: '', type: '', sector: '', source: '', project: '', deadline: '', priority: 'medium', progress: 0, status: ka.dataset.kadd, blockers: '', notes: '', hours: 0, contacts: [] }); return; }
@@ -651,6 +747,7 @@ document.getElementById('fab').onclick = () => openModal(null);
 document.getElementById('mineBtn').onclick = mineVocab;
 document.getElementById('flashBtn').onclick = toggleFlash;
 document.getElementById('projCreate').onclick = createFromTemplate;
+document.getElementById('projBlank').onclick = createBlankProduct;
 document.getElementById('search').oninput = e => { search = e.target.value; if (current === 'table') { renderFilters(); renderTable(); } if (current === 'board') renderBoard(); };
 document.getElementById('exportBtn').onclick = doExport;
 document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
