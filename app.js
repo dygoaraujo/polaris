@@ -87,6 +87,8 @@ const esc = s => (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 const uniq = a => [...new Set(a)];
 const replyDue = t => Array.isArray(t.contacts) && t.contacts.some(c => c.ball === 'me');
 const replyBadge = t => replyDue(t) ? '<span class="reply-badge">↩︎ reply due</span>' : '';
+const sprintBadge = t => t.sprint ? `<span class="sprint-ic" title="Sprint activity">🏃</span>` : '';
+const directiveBadge = t => (t.source === 'Coordinator' || t.source === 'Director') ? `<span class="directive-ic" title="From ${esc(t.source)}">⚠</span>` : '';
 const typeOptions = () => uniq([...(settings.types || []), ...tasks.map(t => t.type).filter(Boolean)]);
 const sectorOptions = () => uniq([...(settings.sectors || []), ...tasks.map(t => t.sector).filter(Boolean)]);
 const productOptions = () => uniq([...(settings.products || []), ...tasks.map(t => t.product).filter(Boolean)]);
@@ -159,7 +161,7 @@ function frow(t) {
     <div class="chk" data-toggle-done="${t.id}">✓</div>
     <div class="prio-bar prio-${t.priority}" style="height:30px"></div>
     <div class="ftitle">${esc(t.title) || '<i style="color:var(--txt-faint)">untitled</i>'}
-      <div class="fmeta">${t.type ? `<span class="tag type">${esc(t.type)}</span>` : ''}${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}${t.sector ? `<span class="tag sec-tag">${esc(t.sector)}</span>` : ''}${t.priority ? `<span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span>` : ''}${replyBadge(t)}${due}</div>
+      <div class="fmeta">${t.type ? `<span class="tag type">${esc(t.type)}</span>` : ''}${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}${t.sector ? `<span class="tag sec-tag">${esc(t.sector)}</span>` : ''}${t.priority ? `<span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span>` : ''}${sprintBadge(t)}${directiveBadge(t)}${replyBadge(t)}${due}</div>
     </div>
     <button class="star ${starred ? 'on' : ''}" data-star="${t.id}" title="Set as today's focus">${starred ? '★' : '☆'}</button>
   </div>`;
@@ -211,7 +213,7 @@ function renderBoardFilters() { document.getElementById('boardFilters').innerHTM
 function renderBoard() {
   renderBoardFilters();
   const cols = [['todo', 'To do'], ['in_progress', 'In progress'], ['blocked', 'Blocked'], ['done', 'Done']];
-  const card = t => `<div class="kcard pl-${t.priority}" draggable="true" data-card="${t.id}"><div class="kt">${esc(t.title) || 'untitled'}</div><div class="km">${t.deadline ? `<span class="due ${t.status !== 'done' && relDays(t.deadline) < 0 ? 'over' : (t.status !== 'done' && relDays(t.deadline) <= 2 ? 'soon' : '')}">${fmtDate(t.deadline)}</span>` : ''}${t.type ? `<span class="tag type">${esc(t.type)}</span>` : ''}${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}${t.sector ? `<span class="tag sec-tag">${esc(t.sector)}</span>` : ''}${t.priority ? `<span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span>` : ''}${replyBadge(t)}</div>${t.progress ? `<div class="kmini"><i style="width:${t.progress}%"></i></div>` : ''}</div>`;
+  const card = t => `<div class="kcard pl-${t.priority}" draggable="true" data-card="${t.id}"><div class="kt">${esc(t.title) || 'untitled'}</div><div class="km">${t.deadline ? `<span class="due ${t.status !== 'done' && relDays(t.deadline) < 0 ? 'over' : (t.status !== 'done' && relDays(t.deadline) <= 2 ? 'soon' : '')}">${fmtDate(t.deadline)}</span>` : ''}${t.type ? `<span class="tag type">${esc(t.type)}</span>` : ''}${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}${t.sector ? `<span class="tag sec-tag">${esc(t.sector)}</span>` : ''}${t.priority ? `<span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span>` : ''}${sprintBadge(t)}${directiveBadge(t)}${replyBadge(t)}</div>${t.progress ? `<div class="kmini"><i style="width:${t.progress}%"></i></div>` : ''}</div>`;
   document.getElementById('board').innerHTML = cols.map(([k, label]) => {
     const items = tasks.filter(t => t.status === k && boardMatch(t, boardFilter) && matchSearch(t)).sort((a, b) => { const o = { urgent: 0, high: 1, medium: 2, low: 3 }; const ra = relDays(a.deadline), rb = relDays(b.deadline); if (ra !== rb) { if (ra === null) return 1; if (rb === null) return -1; return ra - rb; } return o[a.priority] - o[b.priority]; });
     const warn = k === 'in_progress' && items.length > 5 ? 'warn' : '';
@@ -303,7 +305,7 @@ function renderTable() {
       : `<span style="color:var(--txt-dim);font-family:var(--mono);font-size:11.5px">${r}d</span>`;
     return `<tr data-open="${t.id}">
       <td class="idcell">${t.num || ''}</td>
-      <td class="${t.status === 'done' ? 'done' : ''}"><div class="tt"><span class="prio-bar prio-${t.priority}" style="height:16px"></span>${esc(t.title) || 'untitled'} ${replyBadge(t)}</div></td>
+      <td class="${t.status === 'done' ? 'done' : ''}"><div class="tt"><span class="prio-bar prio-${t.priority}" style="height:16px"></span>${esc(t.title) || 'untitled'} ${sprintBadge(t)}${directiveBadge(t)}${replyBadge(t)}</div></td>
       <td>${t.type ? `<span class="tag type">${esc(t.type)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
       <td>${t.product ? `<span class="tag">${esc(t.product)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
       <td>${t.sector ? `<span style="color:var(--txt-dim);font-size:12px">${esc(t.sector)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
@@ -351,7 +353,7 @@ async function inlineEdit(id, field, value) {
 // ── MODAL ─────────────────────────────────────────────────────────────────────
 function selOpts(list, val) { return `<option value="">—</option>` + list.map(o => `<option value="${esc(o)}" ${val === o ? 'selected' : ''}>${esc(o)}</option>`).join(''); }
 function openModal(task) {
-  const t = task || { id: null, title: '', description: '', requester: '', product: '', type: '', sector: '', source: '', project: '', deadline: '', priority: 'medium', progress: 0, status: 'todo', blockers: '', notes: '', hours: 0, contacts: [] };
+  const t = task || { id: null, title: '', description: '', requester: '', product: '', type: '', sector: '', source: '', project: '', deadline: '', priority: 'medium', progress: 0, status: 'todo', sprint: false, blockers: '', notes: '', hours: 0, contacts: [] };
   let clog = JSON.parse(JSON.stringify(t.contacts || []));
   let prioTouched = !!task;
   const BALL = { them: '⏳ Their court', me: '↩︎ Your reply', done: '✓ Resolved' };
@@ -365,6 +367,10 @@ function openModal(task) {
         <div class="field"><label>Type</label><select id="f-type">${selOpts(typeOptions(), t.type)}</select></div>
         <div class="field"><label>Product</label><select id="f-prod">${selOpts(productOptions(), t.product)}</select></div>
         <div class="field"><label>Sector</label><select id="f-sector">${selOpts(sectorOptions(), t.sector)}</select></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Source <span style="font-weight:400;color:var(--txt-faint)">(who assigned it)</span></label><select id="f-source">${selOpts(sourceOptions(), t.source)}</select></div>
+        <div class="field" style="display:flex;align-items:flex-end"><label class="sprint-lbl"><input type="checkbox" id="f-sprint" ${t.sprint ? 'checked' : ''}><span class="sprint-ic" style="font-size:14px;padding:0 3px">🏃</span> Sprint activity <span style="color:var(--txt-faint);font-size:12px">(Scrum)</span></label></div>
       </div>
       <div class="row3">
         <div class="field"><label>Deadline</label><input id="f-due" type="date" value="${t.deadline || ''}"></div>
@@ -419,7 +425,7 @@ function openModal(task) {
 
   document.getElementById('mSave').onclick = async () => {
     const v = id => document.getElementById(id).value;
-    const obj = { id: t.id || uid(), num: t.num || nextNum(), title: v('f-title').trim(), description: v('f-desc').trim(), requester: t.requester || '', product: v('f-prod').trim(), type: v('f-type'), sector: v('f-sector'), source: t.source || '', project: t.project || '', deadline: v('f-due'), priority: v('f-prio'), status: v('f-status'), progress: parseInt(v('f-prog')) || 0, hours: parseFloat(v('f-hours')) || 0, blockers: v('f-block').trim(), notes: v('f-notes').trim(), contacts: clog, createdAt: t.createdAt || new Date().toISOString(), completedAt: t.completedAt || null };
+    const obj = { id: t.id || uid(), num: t.num || nextNum(), title: v('f-title').trim(), description: v('f-desc').trim(), requester: t.requester || '', product: v('f-prod').trim(), type: v('f-type'), sector: v('f-sector'), source: v('f-source'), sprint: document.getElementById('f-sprint').checked, project: t.project || '', deadline: v('f-due'), priority: v('f-prio'), status: v('f-status'), progress: parseInt(v('f-prog')) || 0, hours: parseFloat(v('f-hours')) || 0, blockers: v('f-block').trim(), notes: v('f-notes').trim(), contacts: clog, createdAt: t.createdAt || new Date().toISOString(), completedAt: t.completedAt || null };
     if (obj.status === 'done') { if (!obj.completedAt) obj.completedAt = new Date().toISOString(); obj.progress = 100; }
     if (obj.progress >= 100 && obj.status !== 'done') { obj.status = 'done'; obj.completedAt = new Date().toISOString(); }
     if (!obj.title && !obj.description) { toast('Add at least a title'); return; }
@@ -500,7 +506,7 @@ function renderMetrics() {
   const byStat = Object.keys(STATUSES).map(k => ({ k, label: STATUSES[k], n: mt.filter(t => t.status === k).length }));
   const byType = groupCount(mt, 'type'), byProd = groupCount(mt, 'product').slice(0, 10), bySector = groupCount(mt, 'sector');
   const prioColor = { urgent: 'var(--red)', high: 'var(--amber)', medium: 'var(--blue)', low: 'var(--txt-faint)' };
-  const palette = ['var(--amber)', 'var(--teal)', 'var(--blue)', 'var(--violet)', 'var(--green)', 'var(--red)', '#e0853a', '#7ad', '#c9a', '#8c99b5'];
+  const palette = ['var(--accent)', '#3d80e8', '#5b9bff', '#7ab5ff', 'var(--teal)', '#2aa8d4', '#6abcdf', '#8dcef0', 'var(--violet)', '#a8c8ff'];
   const distro = (arr, colorFn) => { const mx = Math.max(1, ...arr.map(a => a.n)); return `<div class="distro">${arr.map((a, i) => `<div class="row"><span class="lab" title="${esc(a.label)}">${esc(a.label)}</span><div class="track"><div class="fill" style="width:${a.n / mx * 100}%;background:${colorFn(a, i)}"></div></div><span class="num">${a.n}</span></div>`).join('')}</div>`; };
   const pl = metricPeriod === 'total' ? 'all time' : ({ today: 'today', week: 'this week', month: 'this month' }[metricPeriod]);
   document.getElementById('metricsBody').innerHTML = `
@@ -821,6 +827,7 @@ document.getElementById('drawerScrim').onclick = closeDrawer;
     if (!('type' in t)) t.type = '';
     if (!('source' in t)) t.source = '';
     if (!('project' in t)) t.project = '';
+    if (!('sprint' in t)) t.sprint = false;
     if (!Array.isArray(t.contacts)) t.contacts = [];
   });
   if (tasks.some(t => !t.num)) { const ord = [...tasks].sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0)); ord.forEach((t, i) => { if (!t.num) t.num = i + 1; }); await sset('tasks', tasks); }
