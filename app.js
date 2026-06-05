@@ -124,6 +124,8 @@ function boardMatch(t, f) {
   if (f === 'tomorrow') return rd === 1;
   if (f === 'week') { const [a, b] = weekRange(0); return d >= a && d < b; }
   if (f === 'next') { const [a, b] = weekRange(1); return d >= a && d < b; }
+  if (f === 'month') { const n = today(); const a = new Date(n.getFullYear(), n.getMonth(), 1), b = new Date(n.getFullYear(), n.getMonth() + 1, 1); return d >= a && d < b; }
+  if (f === 'next_month') { const n = today(); const a = new Date(n.getFullYear(), n.getMonth() + 1, 1), b = new Date(n.getFullYear(), n.getMonth() + 2, 1); return d >= a && d < b; }
   return true;
 }
 const matchSearch = t => !search || (t.title + ' ' + t.description + ' ' + t.requester + ' ' + t.product + ' ' + t.type + ' ' + t.sector + ' ' + t.source + ' ' + t.project).toLowerCase().includes(search.toLowerCase());
@@ -133,7 +135,7 @@ const FILTER_GROUPS = [
   [{ k: 'todo', label: 'To do' }, { k: 'in_progress', label: 'In progress' }, { k: 'blocked', label: 'Blocked' }, { k: 'done', label: 'Done' }, { k: 'reply', label: 'Reply due' }],
   [{ k: 'overdue', label: 'Overdue', danger: 1 }, { k: 'today', label: 'Today' }, { k: 'week', label: 'This week' }, { k: 'next', label: 'Next week' }]
 ];
-const BOARD_FILTERS = [{ k: 'all', label: 'All' }, { k: 'overdue', label: 'Overdue', danger: 1 }, { k: 'today', label: 'Today' }, { k: 'tomorrow', label: 'Tomorrow' }, { k: 'week', label: 'This week' }, { k: 'next', label: 'Next week' }, { k: 'reply', label: 'Reply due' }];
+const BOARD_FILTERS = [{ k: 'all', label: 'All' }, { k: 'overdue', label: 'Overdue', danger: 1 }, { k: 'today', label: 'Today' }, { k: 'tomorrow', label: 'Tomorrow' }, { k: 'week', label: 'This week' }, { k: 'next', label: 'Next week' }, { k: 'month', label: 'This month' }, { k: 'next_month', label: 'Next month' }, { k: 'reply', label: 'Reply due' }];
 
 // ── Focus (Today pins) ────────────────────────────────────────────────────────
 function ensureFocus() { if (settings.focusDate !== todayStr()) { settings.focusDate = todayStr(); settings.focusIds = []; } }
@@ -190,13 +192,16 @@ function renderToday() {
   const doneMonth = tasks.filter(t => t.completedAt && t.completedAt.slice(0, 7) === m).length;
   const stat = (k, v, c) => `<div class="stat" style="--accent:${c}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
 
-  let html = `<div class="today-hero"><div class="greet">${greet} 👋</div><div class="datestr">${dstr}</div><div class="daybar-wrap"><div class="daybar-top"><span>Today's progress</span><span><b>${doneToday.length}</b> of ${totalDay} done</span></div><div class="daybar"><div class="fill" style="width:${dayPct}%"></div></div></div></div>`;
   const focusTasks = (settings.focusIds || []).map(id => tasks.find(t => t.id === id)).filter(Boolean);
-  html += `<div class="focus-card"><div class="fc-h">⭐ Today's focus</div>`;
-  if (focusTasks.length) html += focusTasks.map((t, i) => `<div class="focus-item ${t.status === 'done' ? 'done' : ''}" data-open="${t.id}"><span class="num">${i + 1}</span><span class="ft">${esc(t.title)}</span>${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}<span class="due ${relDays(t.deadline) < 0 && t.status !== 'done' ? 'over' : ''}">${t.status === 'done' ? '✓' : (relDays(t.deadline) === 0 ? 'today' : fmtDate(t.deadline))}</span></div>`).join('');
-  else html += `<div class="hint">What are the 1–3 things that matter most today? Tap the ☆ on any task below to pin them here.</div>`;
-  html += `</div>`;
-  html += `<div class="stats">${stat('Overdue', overdueOpen.length, 'var(--red)')}${stat('Due today', todayOpen.length, 'var(--amber)')}${stat('In progress', inProg, 'var(--blue)')}${stat('Done this month', doneMonth, 'var(--green)')}</div>`;
+  const focusInner = focusTasks.length
+    ? focusTasks.map((t, i) => `<div class="focus-item ${t.status === 'done' ? 'done' : ''}" data-open="${t.id}"><span class="num">${i + 1}</span><span class="ft">${esc(t.title)}</span>${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}<span class="due ${relDays(t.deadline) < 0 && t.status !== 'done' ? 'over' : ''}">${t.status === 'done' ? '✓' : (relDays(t.deadline) === 0 ? 'today' : fmtDate(t.deadline))}</span></div>`).join('')
+    : `<div class="hint">What are the 1–3 things that matter most today? Tap the ☆ on any task below to pin them here.</div>`;
+
+  let html = `<div class="today-hero"><div class="greet">${greet} 👋</div><div class="datestr">${dstr}</div><div class="daybar-wrap"><div class="daybar-top"><span>Today's progress</span><span><b>${doneToday.length}</b> of ${totalDay} done · <b>${dayPct}%</b></span></div><div class="daybar"><div class="fill" style="width:${dayPct}%"></div></div></div></div>`;
+  html += `<div class="today-mid-row">
+    <div class="stats today-stats">${stat('Overdue', overdueOpen.length, 'var(--red)')}${stat('Due today', todayOpen.length, 'var(--amber)')}${stat('In progress', inProg, 'var(--blue)')}${stat('Done today', doneToday.length, 'var(--green)')}</div>
+    <div class="focus-card" style="margin-bottom:0"><div class="fc-h">⭐ Today's focus</div>${focusInner}</div>
+  </div>`;
   if (reply.length) html += block('fb-reply', '📨', 'Awaiting your reply', reply.length, reply, '');
   const nothingOpen = !overdueOpen.length && !todayOpen.length;
   if (nothingOpen) html += `<div class="celebrate"><div class="big">${doneToday.length ? 'Day cleared 🎉' : 'All clear for today'}</div><div style="color:var(--txt-dim);margin-top:6px">${doneToday.length ? `You cleared everything scheduled for today — ${doneToday.length} done.` : 'Nothing overdue and nothing due today. Pull something forward from the board, or enjoy the win.'}</div></div>`;
@@ -510,6 +515,12 @@ function renderMetrics() {
   const compl = months.map(m => tasks.filter(t => (t.completedAt || '').slice(0, 7) === m).length);
   const maxv = Math.max(1, ...prog, ...compl);
   const labels = months.map(m => toLbl(m, m === curKey, m === nextKey));
+  // Weekly summary
+  const [wkA, wkB] = weekRange(0);
+  const weekDone = tasks.filter(t => { if (!t.completedAt) return false; const x = startOfDay(new Date(t.completedAt)); return x >= wkA && x < wkB; }).sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+  const weekSummaryHTML = weekDone.length
+    ? `<table class="ws-tbl"><thead><tr><th>Activity</th><th>Product</th><th>Priority</th><th>Completed</th></tr></thead><tbody>${weekDone.map(t => `<tr><td class="ws-title">${esc(t.title)}</td><td>${t.product ? `<span class="tag">${esc(t.product)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td><td><span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span></td><td style="color:var(--green);font-family:var(--mono);font-size:11.5px">${fmtDate(t.completedAt.slice(0,10))}</td></tr>`).join('')}</tbody></table>`
+    : `<div style="color:var(--txt-faint);font-size:13.5px;padding:8px 0">Nothing completed this week yet — keep pushing! 🚀</div>`;
   const byPrio = Object.keys(PRIOS).map(k => ({ k, label: PRIOS[k], n: mt.filter(t => t.priority === k).length }));
   const byStat = Object.keys(STATUSES).map(k => ({ k, label: STATUSES[k], n: mt.filter(t => t.status === k).length }));
   const byType = groupCount(mt, 'type'), byProd = groupCount(mt, 'product').slice(0, 10), bySector = groupCount(mt, 'sector');
@@ -518,6 +529,7 @@ function renderMetrics() {
   const distro = (arr, colorFn) => { const mx = Math.max(1, ...arr.map(a => a.n)); return `<div class="distro">${arr.map((a, i) => `<div class="row"><span class="lab" title="${esc(a.label)}">${esc(a.label)}</span><div class="track"><div class="fill" style="width:${a.n / mx * 100}%;background:${colorFn(a, i)}"></div></div><span class="num">${a.n}</span></div>`).join('')}</div>`; };
   const pl = metricPeriod === 'total' ? 'all time' : ({ today: 'today', week: 'this week', month: 'this month' }[metricPeriod]);
   document.getElementById('metricsBody').innerHTML = `
+  <div class="mpanel week-summary-panel" style="margin-bottom:18px"><div class="ws-head"><span>✅ Week summary</span><span class="ws-count">${weekDone.length} completed this week</span></div>${weekSummaryHTML}</div>
   <div class="metric-grid">
     <div class="mpanel"><h4>Completion rate · ${pl}</h4><div class="bigpct" style="color:var(--green)">${rate}%</div><div style="color:var(--txt-dim);margin-top:6px;font-size:13px">${done} of ${total} completed</div></div>
     <div class="mpanel"><h4>Open workload</h4><div class="bigpct">${mt.filter(t => t.status !== 'done').length}</div><div style="color:var(--txt-dim);margin-top:6px;font-size:13px">${mt.filter(t => t.status === 'blocked').length} blocked · ${mt.filter(t => relDays(t.deadline) < 0 && t.status !== 'done').length} overdue</div></div>
