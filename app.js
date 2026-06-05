@@ -602,8 +602,7 @@ function buildLineChartSVG(p, range) {
     <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
     ${arr.map((v, i) => v > 0 ? `<circle cx="${xp(i)}" cy="${yp(v)}" r="3.5" fill="${color}" stroke="#111726" stroke-width="2"/>` : '').join('')}`;
   };
-  const step = Math.ceil(n / 8);
-  const xLabels = bks.map((b, i) => i % step === 0 ? `<text x="${xp(i)}" y="${H - 5}" text-anchor="middle" fill="#5b6886" font-size="10" font-family="IBM Plex Mono,monospace">${b.label}</text>` : '').join('');
+  const xLabels = bks.map((b, i) => `<text x="${xp(i)}" y="${H - 5}" text-anchor="middle" fill="#5b6886" font-size="8.5" font-family="IBM Plex Mono,monospace">${b.label}</text>`).join('');
   const gridN = Math.min(4, maxV);
   const gridLines = Array.from({ length: gridN }, (_, gi) => {
     const f = (gi + 1) / gridN; const y = (Pt + cH - f * cH).toFixed(1); const val = Math.round(f * maxV);
