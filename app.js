@@ -909,7 +909,7 @@ function renderProducts() {
     const prioCls = pprio ? `pp-${pprio}` : '';
     const prioTag = pprio ? `<span class="prio-tag prio-${pprio}">${PRIOS[pprio]}</span>` : '';
     const areaTag = pd.area ? `<span class="prod-area-badge">${esc(pd.area)}</span>` : '';
-    const riskTag = pd.riskClass ? `<span class="prod-risk prod-risk-${pd.riskClass}">Classe ${pd.riskClass}</span>` : '';
+    const riskTag = pd.riskClass ? `<span class="prod-risk prod-risk-${pd.riskClass}">Class ${pd.riskClass}</span>` : '';
     const hasBadges = pprio || pd.area || pd.riskClass;
     const list = its.length
       ? its.slice().sort((a, b) => (a.status === 'done') - (b.status === 'done')).map(t => `<div class="pli ${t.status === 'done' ? 'done' : ''}" data-open="${t.id}"><span class="prio-bar prio-${t.priority}" style="height:16px"></span><span class="pt2">${esc(t.title)}</span><span class="badge b-${t.status}">${STATUSES[t.status]}</span></div>`).join('')
@@ -995,7 +995,7 @@ function openProductDetail(name) {
     ? its.slice().sort((a, b) => (a.status === 'done') - (b.status === 'done')).map(t => `<div class="frow" data-open="${t.id}" style="margin-bottom:6px"><div class="prio-bar prio-${t.priority}" style="height:24px"></div><div class="ftitle">${esc(t.title)}<div class="fmeta"><span class="badge b-${t.status}">${STATUSES[t.status]}</span>${t.deadline ? `<span class="due">${fmtDate(t.deadline)}</span>` : ''}</div></div></div>`).join('')
     : `<div style="color:var(--txt-faint);font-size:13px">No tasks yet.</div>`;
   const areaOpts = ['', 'Ureteral', 'Vascular'].map(v => `<option value="${v}" ${pd.area === v ? 'selected' : ''}>${v || '— not set —'}</option>`).join('');
-  const riskOpts = ['', 'I', 'II', 'III', 'IV'].map(v => `<option value="${v}" ${pd.riskClass === v ? 'selected' : ''}>${v ? `Classe ${v}` : '— not set —'}</option>`).join('');
+  const riskOpts = ['', 'I', 'II', 'III', 'IV'].map(v => `<option value="${v}" ${pd.riskClass === v ? 'selected' : ''}>${v ? `Class ${v}` : '— not set —'}</option>`).join('');
   const prioOpts = ['', 'urgent', 'high', 'medium', 'low'].map(v => `<option value="${v}" ${(pd.priority || '') === v ? 'selected' : ''}>${v ? PRIOS[v] : '— not set —'}</option>`).join('');
   modalHost.innerHTML = `<div class="scrim" id="scrim"><div class="modal" onclick="event.stopPropagation()">
     <div class="mhead"><h3>📦 ${esc(name)}</h3><button class="xclose" id="mClose">✕</button></div>
@@ -1003,9 +1003,9 @@ function openProductDetail(name) {
       <div class="prod-detail-stats"><span><b>${its.length}</b> activities</span><span><b>${done}</b> done</span><span><b>${hours}h</b> logged</span><span><b>${pct}%</b> complete</span></div>
       <div class="pprog" style="margin-bottom:16px"><i style="width:${pct}%"></i></div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
-        <div class="field"><label>Área</label><select id="pd-area">${areaOpts}</select></div>
-        <div class="field"><label>Classe de Risco (ANVISA)</label><select id="pd-risk">${riskOpts}</select></div>
-        <div class="field"><label>Prioridade do Produto</label><select id="pd-prio">${prioOpts}</select></div>
+        <div class="field"><label>Area</label><select id="pd-area">${areaOpts}</select></div>
+        <div class="field"><label>Risk Class (ANVISA)</label><select id="pd-risk">${riskOpts}</select></div>
+        <div class="field"><label>Product Priority</label><select id="pd-prio">${prioOpts}</select></div>
       </div>
       <div class="field"><label>Notes</label><textarea id="pd-notes" style="min-height:80px">${esc(pd.notes || '')}</textarea></div>
       <div class="subhead">✅ Checklist</div>
