@@ -221,26 +221,6 @@ tr.addrow input,tr.addrow select{color-scheme:dark}
 .ws-tbl tr:hover td{background:var(--panel-2)}
 .ws-title{font-weight:600;color:var(--txt)}
 
-/* METRICS */
-.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:18px}
-.mpanel{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r);padding:18px}
-.mpanel h4{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-faint);margin:0 0 14px}
-.bigpct{font-family:var(--display);font-weight:800;font-size:46px;line-height:1}
-.barchart{display:flex;align-items:flex-end;gap:12px;height:160px;padding-top:10px}
-.bc-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0}
-.bc-bars{display:flex;gap:4px;align-items:flex-end;height:120px;width:100%;justify-content:center}
-.bc-bar{width:16px;border-radius:5px 5px 0 0;min-height:3px;transition:height .5s}
-.bc-bar.prog{background:linear-gradient(180deg,var(--blue),#3a5bbf)}.bc-bar.done{background:linear-gradient(180deg,var(--green),#1f9e60)}
-.bc-lbl{font-family:var(--mono);font-size:10.5px;color:var(--txt-faint)}
-.bc-val-row{display:flex;gap:5px;justify-content:center;min-height:15px;margin-bottom:3px}
-.bc-v{font-family:var(--mono);font-size:10px;font-weight:600}
-.bc-vp{color:var(--blue)}.bc-vc{color:var(--green)}
-.legend{display:flex;gap:16px;font-size:12px;color:var(--txt-dim);margin-top:10px}.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
-.distro{display:flex;flex-direction:column;gap:10px}.distro .row{display:flex;align-items:center;gap:10px;font-size:13px}
-.distro .lab{width:130px;color:var(--txt-dim);flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.distro .track{flex:1;height:9px;background:var(--line-soft);border-radius:6px;overflow:hidden}.distro .fill{height:100%;border-radius:6px}
-.distro .num{font-family:var(--mono);font-size:12px;width:28px;text-align:right;color:var(--txt-dim)}
-
 /* INLINE PICKER */
 .inline-picker{animation:pop .15s ease}
 
