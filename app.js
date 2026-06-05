@@ -313,7 +313,7 @@ function renderTable() {
       : `<span style="color:var(--txt-dim);font-family:var(--mono);font-size:11.5px">${r}d</span>`;
     return `<tr data-open="${t.id}">
       <td class="idcell">${t.num || ''}</td>
-      <td class="${t.status === 'done' ? 'done' : ''}"><div class="tt"><span class="prio-bar prio-${t.priority}" style="height:16px"></span>${esc(t.title) || 'untitled'} ${sprintBadge(t)}${directiveBadge(t)}${replyBadge(t)}</div></td>
+      <td class="${t.status === 'done' ? 'done' : ''}"><div class="tt"><span class="prio-bar prio-${t.priority}" style="height:16px;flex:none"></span><span class="ttxt">${esc(t.title) || 'untitled'}</span>${sprintBadge(t)}${directiveBadge(t)}${replyBadge(t)}</div></td>
       <td>${t.type ? `<span class="tag type">${esc(t.type)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
       <td>${t.product ? `<span class="tag">${esc(t.product)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
       <td>${t.sector ? `<span style="color:var(--txt-dim);font-size:12px">${esc(t.sector)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
@@ -896,6 +896,7 @@ function renderProducts() {
   const names = uniq([...(settings.products || []), ...tasks.map(t => t.product).filter(Boolean)]);
   const grid = document.getElementById('prodGrid');
   if (!names.length) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="big">No products yet</div><div>Type a name above and click "＋ Add product".</div></div>`; return; }
+  settings.productData = settings.productData || {};
   grid.innerHTML = names.map(n => {
     const its = tasks.filter(t => t.product === n);
     const done = its.filter(t => t.status === 'done').length;
@@ -903,11 +904,75 @@ function renderProducts() {
     const pct = its.length ? Math.round(done / its.length * 100) : 0;
     const last = its.map(t => t.completedAt || t.createdAt).filter(Boolean).sort().slice(-1)[0];
     const lastTxt = last ? new Date(last).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+    const pd = settings.productData[n] || {};
+    const pprio = pd.priority || '';
+    const prioCls = pprio ? `pp-${pprio}` : '';
+    const prioTag = pprio ? `<span class="prio-tag prio-${pprio}">${PRIOS[pprio]}</span>` : '';
+    const areaTag = pd.area ? `<span class="prod-area-badge">${esc(pd.area)}</span>` : '';
+    const riskTag = pd.riskClass ? `<span class="prod-risk prod-risk-${pd.riskClass}">Classe ${pd.riskClass}</span>` : '';
+    const hasBadges = pprio || pd.area || pd.riskClass;
     const list = its.length
       ? its.slice().sort((a, b) => (a.status === 'done') - (b.status === 'done')).map(t => `<div class="pli ${t.status === 'done' ? 'done' : ''}" data-open="${t.id}"><span class="prio-bar prio-${t.priority}" style="height:16px"></span><span class="pt2">${esc(t.title)}</span><span class="badge b-${t.status}">${STATUSES[t.status]}</span></div>`).join('')
       : `<div style="color:var(--txt-faint);font-size:13px;padding:8px 4px">No tasks yet. Add a task and tag it with this product.</div>`;
-    return `<div class="prodcard"><div class="ph" data-prod="${esc(n)}" title="Open details" style="cursor:pointer"><div class="pn">${esc(n)}</div><div class="pstats"><span><b>${its.length}</b> activities</span><span><b>${done}</b> done</span><span><b>${hours}</b>h</span>${its.length ? `<span>last: <b>${lastTxt}</b></span>` : ''}</div><div class="pprog"><i style="width:${pct}%"></i></div></div><div class="pl">${list}</div></div>`;
+    return `<div class="prodcard ${prioCls}" draggable="true" data-prodname="${esc(n)}">
+      <div class="ph" style="cursor:pointer">
+        <div class="prod-ph-row">
+          <span class="prod-drag" title="Drag to reorder">⠿</span>
+          <div class="pn" style="flex:1;min-width:0">${esc(n)}</div>
+          <button class="prod-edit-btn" data-rename="${esc(n)}" title="Rename product">✏</button>
+        </div>
+        ${hasBadges ? `<div class="prod-badges">${areaTag}${riskTag}${prioTag}</div>` : ''}
+        <div class="pstats"><span><b>${its.length}</b> activities</span><span><b>${done}</b> done</span><span><b>${hours}</b>h</span>${its.length ? `<span>last: <b>${lastTxt}</b></span>` : ''}</div>
+        <div class="pprog"><i style="width:${pct}%"></i></div>
+      </div>
+      <div class="pl">${list}</div>
+    </div>`;
   }).join('');
+
+  // Click on card header → open detail (not on rename btn or drag handle)
+  grid.querySelectorAll('.prodcard .ph').forEach(ph => {
+    ph.onclick = e => {
+      if (e.target.closest('[data-rename]') || e.target.classList.contains('prod-drag')) return;
+      openProductDetail(ph.closest('.prodcard').dataset.prodname);
+    };
+  });
+
+  // Rename buttons
+  grid.querySelectorAll('[data-rename]').forEach(btn => {
+    btn.onclick = e => { e.stopPropagation(); renameProduct(btn.dataset.rename); };
+  });
+
+  // Drag to reorder
+  let dragSrc = null;
+  grid.querySelectorAll('.prodcard[draggable]').forEach(card => {
+    card.addEventListener('dragstart', e => {
+      dragSrc = card.dataset.prodname;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => card.style.opacity = '0.45', 0);
+    });
+    card.addEventListener('dragend', () => {
+      card.style.opacity = '';
+      grid.querySelectorAll('.prodcard').forEach(c => c.classList.remove('drag-over'));
+    });
+    card.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (card.dataset.prodname !== dragSrc) card.classList.add('drag-over');
+    });
+    card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      const target = card.dataset.prodname;
+      if (!dragSrc || dragSrc === target) return;
+      const arr = uniq([...(settings.products || []), ...tasks.map(t => t.product).filter(Boolean)]);
+      const fi = arr.indexOf(dragSrc), ti = arr.indexOf(target);
+      if (fi < 0 || ti < 0) return;
+      arr.splice(fi, 1); arr.splice(ti, 0, dragSrc);
+      settings.products = arr;
+      sset('settings', settings);
+      renderProducts();
+    });
+  });
 }
 function createBlankProduct() {
   const inp = document.getElementById('projName');
@@ -929,11 +994,19 @@ function openProductDetail(name) {
   const taskList = its.length
     ? its.slice().sort((a, b) => (a.status === 'done') - (b.status === 'done')).map(t => `<div class="frow" data-open="${t.id}" style="margin-bottom:6px"><div class="prio-bar prio-${t.priority}" style="height:24px"></div><div class="ftitle">${esc(t.title)}<div class="fmeta"><span class="badge b-${t.status}">${STATUSES[t.status]}</span>${t.deadline ? `<span class="due">${fmtDate(t.deadline)}</span>` : ''}</div></div></div>`).join('')
     : `<div style="color:var(--txt-faint);font-size:13px">No tasks yet.</div>`;
+  const areaOpts = ['', 'Ureteral', 'Vascular'].map(v => `<option value="${v}" ${pd.area === v ? 'selected' : ''}>${v || '— not set —'}</option>`).join('');
+  const riskOpts = ['', 'I', 'II', 'III', 'IV'].map(v => `<option value="${v}" ${pd.riskClass === v ? 'selected' : ''}>${v ? `Classe ${v}` : '— not set —'}</option>`).join('');
+  const prioOpts = ['', 'urgent', 'high', 'medium', 'low'].map(v => `<option value="${v}" ${(pd.priority || '') === v ? 'selected' : ''}>${v ? PRIOS[v] : '— not set —'}</option>`).join('');
   modalHost.innerHTML = `<div class="scrim" id="scrim"><div class="modal" onclick="event.stopPropagation()">
     <div class="mhead"><h3>📦 ${esc(name)}</h3><button class="xclose" id="mClose">✕</button></div>
     <div class="mbody">
       <div class="prod-detail-stats"><span><b>${its.length}</b> activities</span><span><b>${done}</b> done</span><span><b>${hours}h</b> logged</span><span><b>${pct}%</b> complete</span></div>
       <div class="pprog" style="margin-bottom:16px"><i style="width:${pct}%"></i></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="field"><label>Área</label><select id="pd-area">${areaOpts}</select></div>
+        <div class="field"><label>Classe de Risco (ANVISA)</label><select id="pd-risk">${riskOpts}</select></div>
+        <div class="field"><label>Prioridade do Produto</label><select id="pd-prio">${prioOpts}</select></div>
+      </div>
       <div class="field"><label>Notes</label><textarea id="pd-notes" style="min-height:80px">${esc(pd.notes || '')}</textarea></div>
       <div class="subhead">✅ Checklist</div>
       <div id="pd-checklist" style="margin-bottom:4px"></div>
@@ -957,7 +1030,7 @@ function openProductDetail(name) {
   renderChecklist();
   document.getElementById('pd-ca').onclick = () => { const inp2 = document.getElementById('pd-ci'); const text = inp2.value.trim(); if (!text) return; checklist.push({ text, done: false }); inp2.value = ''; renderChecklist(); };
   document.getElementById('pd-ci').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('pd-ca').click(); });
-  document.getElementById('pd-save').onclick = () => { settings.productData = settings.productData || {}; settings.productData[name] = { notes: document.getElementById('pd-notes').value.trim(), checklist }; sset('settings', settings); close(); toast('Saved ✓'); };
+  document.getElementById('pd-save').onclick = () => { settings.productData = settings.productData || {}; settings.productData[name] = { notes: document.getElementById('pd-notes').value.trim(), checklist, area: document.getElementById('pd-area').value, riskClass: document.getElementById('pd-risk').value, priority: document.getElementById('pd-prio').value }; sset('settings', settings); close(); toast('Saved ✓'); };
   document.getElementById('pd-del').onclick = async () => {
     const tagged = tasks.filter(t => t.product === name);
     const tagMsg = tagged.length ? `<br><br><span style="color:var(--txt-dim);font-size:13px">${tagged.length} task(s) tagged with this product will be <b>untagged</b> (not deleted).</span>` : '';
@@ -968,6 +1041,40 @@ function openProductDetail(name) {
       sset('settings', settings); close(); toast(`"${name}" deleted${tagged.length ? ` · ${tagged.length} task(s) untagged` : ''}`);
     }
   };
+}
+function renameProduct(oldName) {
+  modalHost.innerHTML = `<div class="scrim" id="scrim"><div class="modal" onclick="event.stopPropagation()" style="max-width:420px">
+    <div class="mhead"><h3>✏ Rename Product</h3><button class="xclose" id="mClose">✕</button></div>
+    <div class="mbody">
+      <div class="field"><label>New name</label><input id="rn-input" value="${esc(oldName)}" style="font-size:15px"></div>
+    </div>
+    <div class="mfoot"><div></div><div style="display:flex;gap:10px"><button class="btn ghost" id="rn-cancel">Cancel</button><button class="btn primary" id="rn-save">Rename</button></div></div>
+  </div></div>`;
+  const close = () => { modalHost.innerHTML = ''; renderProducts(); };
+  document.getElementById('scrim').onclick = close;
+  document.getElementById('mClose').onclick = close;
+  document.getElementById('rn-cancel').onclick = close;
+  const inp = document.getElementById('rn-input');
+  inp.focus(); inp.select();
+  const doRename = () => {
+    const newName = inp.value.trim();
+    if (!newName) { toast('Name cannot be empty'); return; }
+    if (newName === oldName) { close(); return; }
+    const all = uniq([...(settings.products || []), ...tasks.map(t => t.product).filter(Boolean)]);
+    if (all.includes(newName)) { toast(`"${newName}" already exists`); return; }
+    settings.products = (settings.products || []).map(p => p === oldName ? newName : p);
+    if (settings.productData && settings.productData[oldName]) {
+      settings.productData[newName] = settings.productData[oldName];
+      delete settings.productData[oldName];
+    }
+    tasks.forEach(t => { if (t.product === oldName) t.product = newName; });
+    saveTasks();
+    sset('settings', settings);
+    close();
+    toast(`Renamed to "${newName}" ✓`);
+  };
+  document.getElementById('rn-save').onclick = doRename;
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') doRename(); if (e.key === 'Escape') close(); });
 }
 function createFromTemplate() {
   const inp = document.getElementById('projName');
