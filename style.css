@@ -91,8 +91,8 @@ button{font-family:inherit;cursor:pointer}input,textarea,select{font-family:inhe
 .focus-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-soft);cursor:pointer}.focus-item:last-child{border-bottom:0}
 .focus-item .num{font-family:var(--display);font-weight:800;color:var(--accent);width:20px}.focus-item .ft{flex:1;font-weight:600}.focus-item.done .ft{text-decoration:line-through;color:var(--txt-dim)}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
-.today-mid-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;align-items:start}
-.today-stats{grid-template-columns:1fr 1fr!important;margin-bottom:0!important}
+.today-top-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;align-items:stretch}
+.today-stats{grid-template-columns:1fr 1fr!important;margin-bottom:0!important;align-self:start}
 .stat{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r);padding:14px 16px;position:relative;overflow:hidden}
 .stat::after{content:'';position:absolute;inset:0 0 auto 0;height:3px;background:var(--accent,var(--amber));opacity:.75}
 .stat .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-faint)}
@@ -232,6 +232,9 @@ tr.addrow input,tr.addrow select{color-scheme:dark}
 .bc-bar{width:16px;border-radius:5px 5px 0 0;min-height:3px;transition:height .5s}
 .bc-bar.prog{background:linear-gradient(180deg,var(--blue),#3a5bbf)}.bc-bar.done{background:linear-gradient(180deg,var(--green),#1f9e60)}
 .bc-lbl{font-family:var(--mono);font-size:10.5px;color:var(--txt-faint)}
+.bc-val-row{display:flex;gap:5px;justify-content:center;min-height:15px;margin-bottom:3px}
+.bc-v{font-family:var(--mono);font-size:10px;font-weight:600}
+.bc-vp{color:var(--blue)}.bc-vc{color:var(--green)}
 .legend{display:flex;gap:16px;font-size:12px;color:var(--txt-dim);margin-top:10px}.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
 .distro{display:flex;flex-direction:column;gap:10px}.distro .row{display:flex;align-items:center;gap:10px;font-size:13px}
 .distro .lab{width:130px;color:var(--txt-dim);flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
