@@ -347,7 +347,7 @@ tr.addrow input,tr.addrow select{color-scheme:dark}
 .dkpi-row{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--txt-dim)}
 .dkpi-row b{margin-left:auto;font-family:var(--mono);font-size:13px;font-weight:700}
 .dkpi-dot{width:8px;height:8px;border-radius:50%;flex:none}
-.dash-trend-row{display:grid;grid-template-columns:1.9fr 1fr;gap:14px;margin-bottom:20px;align-items:start}
+.dash-trend-row{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:20px;align-items:start}
 .dash-trend-side{display:flex;flex-direction:column;gap:14px}
 .dash-mpanel{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r);padding:18px}
 .dash-panel-head{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-faint);margin-bottom:14px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
