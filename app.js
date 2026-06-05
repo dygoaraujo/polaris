@@ -87,7 +87,7 @@ const esc = s => (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 const uniq = a => [...new Set(a)];
 const replyDue = t => Array.isArray(t.contacts) && t.contacts.some(c => c.ball === 'me');
 const replyBadge = t => replyDue(t) ? '<span class="reply-badge">↩︎ reply due</span>' : '';
-const sprintBadge = t => (t.sector === 'Engineering Projects' && t.sprint) ? `<span class="sprint-ic" title="Sprint activity"><svg width="9" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>` : '';
+const sprintBadge = t => (t.sector === 'Engineering Projects' && t.sprint) ? `<span class="sprint-ic" title="Sprint activity"><svg width="12" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>` : '';
 const directiveBadge = t => (t.sector === 'Engineering Coordination' || t.sector === 'Industrial Management') ? `<span class="directive-ic" title="${esc(t.sector)}">⚠</span>` : '';
 const typeOptions = () => uniq([...(settings.types || []), ...tasks.map(t => t.type).filter(Boolean)]);
 const sectorOptions = () => uniq([...(settings.sectors || []), ...tasks.map(t => t.sector).filter(Boolean)]);
@@ -243,7 +243,7 @@ function renderFilters() {
     FILTER_GROUPS.map(g => g.map(f => `<button class="chip ${filter === f.k ? 'on' : ''} ${f.danger ? 'danger' : ''}" data-f="${f.k}">${f.label} <span class="n">${countFor(f.k)}</span></button>`).join('')).join('<span class="fdiv"></span>')
     + `<span class="fdiv"></span><button class="chip ${isNewestSort ? 'on' : ''}" data-sq="createdAt:-1">🆕 Newest</button><button class="chip ${isDeadlineSort ? 'on' : ''}" data-sq="deadline:1">📅 Deadline ↑</button>`;
 }
-const COLS = [{ k: 'num', l: '#' }, { k: 'title', l: 'Task' }, { k: 'type', l: 'Type' }, { k: 'product', l: 'Product' }, { k: 'sector', l: 'Sector' }, { k: 'createdAt', l: 'Created' }, { k: 'deadline', l: 'Deadline' }, { k: 'daysLeft', l: 'Days left' }, { k: 'priority', l: 'Priority' }, { k: 'progress', l: 'Progress' }, { k: 'status', l: 'Status' }];
+const COLS = [{ k: 'num', l: '#' }, { k: 'title', l: 'Task' }, { k: 'type', l: 'Type' }, { k: 'product', l: 'Product' }, { k: 'sector', l: 'Sector' }, { k: 'deadline', l: 'Deadline' }, { k: 'daysLeft', l: 'Days left' }, { k: 'completedAt', l: 'Completed' }, { k: 'priority', l: 'Priority' }, { k: 'progress', l: 'Progress' }, { k: 'status', l: 'Status' }, { k: 'createdAt', l: 'Created' }];
 const NUM_COLS = COLS.length;
 const nextNum = () => Math.max(0, ...tasks.map(t => t.num || 0)) + 1;
 
@@ -257,12 +257,13 @@ function addRowHTML() {
     <td><select id="ar-type">${selOpts(typeOptions(), '')}</select></td>
     <td><select id="ar-prod">${selOpts(productOptions(), '')}</select></td>
     <td><select id="ar-sector">${selOpts(sectorOptions(), '')}</select></td>
-    <td><span class="muted">today</span></td>
     <td><input id="ar-due" type="date"></td>
+    <td><span class="muted">—</span></td>
     <td><span class="muted">—</span></td>
     <td><select id="ar-prio">${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}" ${k === 'medium' ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
     <td><span class="muted">0%</span></td>
     <td><select id="ar-status">${Object.entries(STATUSES).map(([k, v]) => `<option value="${k}" ${k === 'todo' ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
+    <td><span class="muted">today</span></td>
   </tr>`;
 }
 function commitAddRow() {
@@ -309,12 +310,13 @@ function renderTable() {
       <td>${t.type ? `<span class="tag type">${esc(t.type)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
       <td>${t.product ? `<span class="tag">${esc(t.product)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
       <td>${t.sector ? `<span style="color:var(--txt-dim);font-size:12px">${esc(t.sector)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
-      <td class="mono" style="color:var(--txt-faint);font-size:11.5px">${fmtDate((t.createdAt || '').slice(0, 10))}</td>
       <td><span class="due ${dcls}">${fmtDate(t.deadline)}</span></td>
       <td>${daysCell}</td>
+      <td>${t.completedAt ? `<span style="color:var(--green);font-family:var(--mono);font-size:11.5px">${fmtDate(t.completedAt.slice(0,10))}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
       <td><span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span></td>
       <td><div data-iprog="${t.id}" class="prog-cell" title="Click to edit"><span class="minibar"><i style="width:${t.progress || 0}%"></i></span><span class="mono" style="font-size:11px;color:var(--txt-dim)">${t.progress || 0}%</span></div></td>
       <td><div data-istat="${t.id}" class="stat-cell" title="Click to change"><span class="badge b-${t.status}">${STATUSES[t.status]}</span><span style="color:var(--txt-faint);font-size:10px;margin-left:2px">▾</span></div></td>
+      <td class="mono" style="color:var(--txt-faint);font-size:11px">${fmtDate((t.createdAt || '').slice(0, 10))}</td>
     </tr>`;
   }).join('');
   document.getElementById('tbl').innerHTML = head + `<tbody>${body}${addRowHTML()}</tbody>`;
@@ -374,7 +376,10 @@ function openModal(task) {
         <div class="field"><label>Priority</label><select id="f-prio">${Object.entries(PRIOS).map(([k, v]) => `<option value="${k}" ${t.priority === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
         <div class="field"><label>Status</label><select id="f-status">${Object.entries(STATUSES).map(([k, v]) => `<option value="${k}" ${t.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
       </div>
-      <div class="field" style="max-width:200px"><label>Hours logged</label><input id="f-hours" type="number" min="0" step="0.5" value="${t.hours || 0}"></div>
+      <div class="row2">
+        <div class="field" style="max-width:200px"><label>Hours logged</label><input id="f-hours" type="number" min="0" step="0.5" value="${t.hours || 0}"></div>
+        <div class="field" id="f-comp-wrap" style="${t.status === 'done' ? '' : 'display:none'}"><label>Completed on <span style="font-weight:400;color:var(--txt-faint)">(auto-filled, editable)</span></label><input id="f-comp" type="date" value="${(t.completedAt || '').slice(0, 10)}"></div>
+      </div>
       <div class="field"><label>Progress — <span id="pv">${t.progress || 0}</span>%</label><div class="prog-row"><input id="f-prog" type="range" min="0" max="100" step="5" value="${t.progress || 0}"></div></div>
       <div class="field"><label>Blocked by (optional)</label><input id="f-block" value="${esc(t.blockers)}" placeholder="What's stopping it?"></div>
       <div class="field"><label>Notes &amp; drafts</label><textarea id="f-notes" placeholder="Scratch notes, links, sub-steps…">${esc(t.notes)}</textarea></div>
@@ -389,6 +394,11 @@ function openModal(task) {
   scrim.onclick = close; mClose.onclick = close; mCancel.onclick = close;
   document.getElementById('f-prog').oninput = e => document.getElementById('pv').textContent = e.target.value;
   document.getElementById('f-prio').addEventListener('change', () => prioTouched = true);
+  document.getElementById('f-status').addEventListener('change', e => {
+    const wrap = document.getElementById('f-comp-wrap'); if (!wrap) return;
+    const isDone = e.target.value === 'done'; wrap.style.display = isDone ? '' : 'none';
+    if (isDone && !document.getElementById('f-comp').value) document.getElementById('f-comp').value = new Date().toISOString().slice(0, 10);
+  });
   const md = document.getElementById('mDel');
   if (md) md.onclick = async () => { if (await customConfirm('Delete this task?', { yes: 'Delete', no: 'Cancel', danger: true })) { tasks = tasks.filter(x => x.id !== t.id); await saveTasks(); close(); toast('Deleted'); } };
 
@@ -423,7 +433,8 @@ function openModal(task) {
   document.getElementById('mSave').onclick = async () => {
     const v = id => document.getElementById(id).value;
     const obj = { id: t.id || uid(), num: t.num || nextNum(), title: v('f-title').trim(), description: v('f-desc').trim(), requester: t.requester || '', product: v('f-prod').trim(), type: v('f-type'), sector: v('f-sector'), source: t.source || '', sprint: document.getElementById('f-sprint').checked, project: t.project || '', deadline: v('f-due'), priority: v('f-prio'), status: v('f-status'), progress: parseInt(v('f-prog')) || 0, hours: parseFloat(v('f-hours')) || 0, blockers: v('f-block').trim(), notes: v('f-notes').trim(), contacts: clog, createdAt: t.createdAt || new Date().toISOString(), completedAt: t.completedAt || null };
-    if (obj.status === 'done') { if (!obj.completedAt) obj.completedAt = new Date().toISOString(); obj.progress = 100; }
+    const compField = document.getElementById('f-comp');
+    if (obj.status === 'done') { const cd = compField && compField.value; obj.completedAt = cd ? new Date(cd + 'T12:00:00').toISOString() : (t.completedAt || new Date().toISOString()); obj.progress = 100; } else { obj.completedAt = null; }
     if (obj.progress >= 100 && obj.status !== 'done') { obj.status = 'done'; obj.completedAt = new Date().toISOString(); }
     if (!obj.title && !obj.description) { toast('Add at least a title'); return; }
     if (t.id) tasks = tasks.map(x => x.id === t.id ? obj : x); else tasks.unshift(obj);
@@ -475,7 +486,7 @@ function renderFlash() {
 
 // ── METRICS ───────────────────────────────────────────────────────────────────
 function periodRange(p) { const t = today(); if (p === 'today') return [t, new Date(t.getTime() + DAY)]; if (p === 'week') return weekRange(0); if (p === 'month') return [new Date(t.getFullYear(), t.getMonth(), 1), new Date(t.getFullYear(), t.getMonth() + 1, 1)]; return null; }
-function metricIn(t) { if (metricPeriod === 'total') return true; const [a, b] = periodRange(metricPeriod); const inR = d => { if (!d) return false; const s = typeof d === 'string' && !d.includes('T') ? d + 'T00:00:00' : d; const x = startOfDay(new Date(s)); return x >= a && x < b; }; return inR(t.deadline) || inR(t.completedAt) || inR(t.createdAt); }
+function metricIn(t) { if (metricPeriod === 'total') return true; const [a, b] = periodRange(metricPeriod); const inR = d => { if (!d) return false; const s = typeof d === 'string' && !d.includes('T') ? d + 'T00:00:00' : d; const x = startOfDay(new Date(s)); return x >= a && x < b; }; return inR(t.deadline) || inR(t.completedAt); }
 function groupCount(arr, field) { const m = {}; arr.forEach(t => { const v = (t[field] || '').trim() || '(none)'; m[v] = (m[v] || 0) + 1; }); return Object.entries(m).map(([label, n]) => ({ label, n })).sort((a, b) => b.n - a.n); }
 function renderMetricChips() { const P = [['today', 'Today'], ['week', 'This week'], ['month', 'This month'], ['total', 'Total']]; document.getElementById('metricChips').innerHTML = P.map(([k, l]) => `<button class="chip ${metricPeriod === k ? 'on' : ''}" data-mp="${k}">${l}</button>`).join(''); }
 function renderMetrics() {
