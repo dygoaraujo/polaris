@@ -152,7 +152,8 @@ table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:1060px}
 thead th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--txt-faint);padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;user-select:none}
 thead th:hover{color:var(--txt-dim)}.ar{opacity:.6;font-size:9px}
 tbody tr{border-bottom:1px solid var(--line-soft);cursor:pointer;transition:.1s}tbody tr:last-child{border-bottom:0}tbody tr:hover{background:var(--panel-2)}tbody td{padding:11px 14px;vertical-align:middle;white-space:nowrap}
-td .tt{font-weight:600;display:flex;align-items:center;gap:9px;max-width:340px}td.done .tt{text-decoration:line-through;color:var(--txt-dim)}.ttxt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+td.tdtask{white-space:normal}
+td .tt{font-weight:600;display:flex;align-items:center;gap:9px}td.done .tt{text-decoration:line-through;color:var(--txt-dim)}.ttxt{flex:1;min-width:0}
 td .sub{font-size:11px;color:var(--txt-faint);margin-top:2px}
 .minibar{width:60px;height:7px;background:var(--line);border-radius:5px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:7px}.minibar i{display:block;height:100%;background:var(--accent)}
 .stat-cell,.prog-cell{display:inline-flex;align-items:center;gap:4px;cursor:pointer;border-radius:6px;padding:2px 5px;transition:.12s;margin:-2px -5px}
