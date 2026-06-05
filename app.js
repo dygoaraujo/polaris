@@ -199,11 +199,11 @@ function renderToday() {
     ? focusTasks.map((t, i) => `<div class="focus-item ${t.status === 'done' ? 'done' : ''}" data-open="${t.id}"><span class="num">${i + 1}</span><span class="ft">${esc(t.title)}</span>${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}<span class="due ${relDays(t.deadline) < 0 && t.status !== 'done' ? 'over' : ''}">${t.status === 'done' ? '✓' : (relDays(t.deadline) === 0 ? 'today' : fmtDate(t.deadline))}</span></div>`).join('')
     : `<div class="hint">What are the 1–3 things that matter most today? Tap the ☆ on any task below to pin them here.</div>`;
 
-  let html = `<div class="today-hero"><div class="greet">${greet} 👋</div><div class="datestr">${dstr}</div><div class="daybar-wrap"><div class="daybar-top"><span>Today's progress</span><span><b>${doneToday.length}</b> of ${totalDay} done · <b>${dayPct}%</b></span></div><div class="daybar"><div class="fill" style="width:${dayPct}%"></div></div></div></div>`;
-  html += `<div class="today-mid-row">
+  let html = `<div class="today-top-row">
+    <div class="today-hero" style="margin-bottom:0"><div class="greet">${greet} 👋</div><div class="datestr">${dstr}</div><div class="daybar-wrap"><div class="daybar-top"><span>Today's progress</span><span><b>${doneToday.length}</b> of ${totalDay} done · <b>${dayPct}%</b></span></div><div class="daybar"><div class="fill" style="width:${dayPct}%"></div></div></div></div>
     <div class="stats today-stats">${stat('Overdue', overdueOpen.length, 'var(--red)')}${stat('Due today', todayOpen.length, 'var(--amber)')}${stat('In progress', inProg, 'var(--blue)')}${stat('Done today', doneToday.length, 'var(--green)')}</div>
-    <div class="focus-card" style="margin-bottom:0"><div class="fc-h">⭐ Today's focus</div>${focusInner}</div>
-  </div>`;
+  </div>
+  <div class="focus-card" style="margin-bottom:18px"><div class="fc-h">⭐ Today's focus</div>${focusInner}</div>`;
   if (reply.length) html += block('fb-reply', '📨', 'Awaiting your reply', reply.length, reply, '');
   const nothingOpen = !overdueOpen.length && !todayOpen.length;
   if (nothingOpen) html += `<div class="celebrate"><div class="big">${doneToday.length ? 'Day cleared 🎉' : 'All clear for today'}</div><div style="color:var(--txt-dim);margin-top:6px">${doneToday.length ? `You cleared everything scheduled for today — ${doneToday.length} done.` : 'Nothing overdue and nothing due today. Pull something forward from the board, or enjoy the win.'}</div></div>`;
@@ -531,7 +531,6 @@ function renderMetrics() {
   const distro = (arr, colorFn) => { const mx = Math.max(1, ...arr.map(a => a.n)); return `<div class="distro">${arr.map((a, i) => `<div class="row"><span class="lab" title="${esc(a.label)}">${esc(a.label)}</span><div class="track"><div class="fill" style="width:${a.n / mx * 100}%;background:${colorFn(a, i)}"></div></div><span class="num">${a.n}</span></div>`).join('')}</div>`; };
   const pl = metricPeriod === 'total' ? 'all time' : ({ today: 'today', week: 'this week', month: 'this month' }[metricPeriod]);
   document.getElementById('metricsBody').innerHTML = `
-  <div class="mpanel week-summary-panel" style="margin-bottom:18px"><div class="ws-head"><span>✅ Week summary</span><span class="ws-count">${weekDone.length} completed this week</span></div>${weekSummaryHTML}</div>
   <div class="metric-grid">
     <div class="mpanel"><h4>Completion rate · ${pl}</h4><div class="bigpct" style="color:var(--green)">${rate}%</div><div style="color:var(--txt-dim);margin-top:6px;font-size:13px">${done} of ${total} completed</div></div>
     <div class="mpanel"><h4>Open workload</h4><div class="bigpct">${mt.filter(t => t.status !== 'done').length}</div><div style="color:var(--txt-dim);margin-top:6px;font-size:13px">${mt.filter(t => t.status === 'blocked').length} blocked · ${mt.filter(t => relDays(t.deadline) < 0 && t.status !== 'done').length} overdue</div></div>
@@ -539,14 +538,15 @@ function renderMetrics() {
     <div class="mpanel"><h4>Awaiting your reply</h4><div class="bigpct" style="color:var(--red)">${tasks.filter(t => t.status !== 'done' && replyDue(t)).length}</div><div style="color:var(--txt-dim);margin-top:6px;font-size:13px">supplier balls in your court</div></div>
   </div>
   <div class="metric-grid" style="grid-template-columns:1.4fr 1fr">
-    <div class="mpanel"><h4>Deadlines vs. completed — by month</h4><div class="barchart">${labels.map((l, i) => `<div class="bc-col"><div class="bc-bars"><div class="bc-bar prog" style="height:${prog[i] / maxv * 120}px" title="${prog[i]} planned"></div><div class="bc-bar done" style="height:${compl[i] / maxv * 120}px" title="${compl[i]} completed"></div></div><div class="bc-lbl">${l}</div></div>`).join('')}</div><div class="legend"><span><i style="background:var(--blue)"></i>Planned</span><span><i style="background:var(--green)"></i>Completed</span></div></div>
+    <div class="mpanel"><h4>Deadlines vs. completed — by month</h4><div class="barchart">${labels.map((l, i) => `<div class="bc-col"><div class="bc-val-row"><span class="bc-v bc-vp">${prog[i] > 0 ? prog[i] : ''}</span><span class="bc-v bc-vc">${compl[i] > 0 ? compl[i] : ''}</span></div><div class="bc-bars"><div class="bc-bar prog" style="height:${prog[i] / maxv * 120}px" title="${prog[i]} planned"></div><div class="bc-bar done" style="height:${compl[i] / maxv * 120}px" title="${compl[i]} completed"></div></div><div class="bc-lbl">${l}</div></div>`).join('')}</div><div class="legend"><span><i style="background:var(--blue)"></i>Planned</span><span><i style="background:var(--green)"></i>Completed</span></div></div>
     <div class="mpanel"><h4>By priority · ${pl}</h4>${distro(byPrio, a => prioColor[a.k])}<h4 style="margin-top:18px">By status</h4>${distro(byStat, a => STAT_COLOR[a.k])}</div>
   </div>
   <div class="metric-grid" style="grid-template-columns:1fr 1fr 1fr">
     <div class="mpanel"><h4>By type · ${pl}</h4>${byType.length ? distro(byType, (a, i) => palette[i % palette.length]) : '<div style="color:var(--txt-faint);font-size:13px">No data.</div>'}</div>
     <div class="mpanel"><h4>By product · ${pl}</h4>${byProd.length ? distro(byProd, (a, i) => palette[i % palette.length]) : '<div style="color:var(--txt-faint);font-size:13px">No data.</div>'}</div>
     <div class="mpanel"><h4>By sector · ${pl}</h4>${bySector.length ? distro(bySector, (a, i) => palette[i % palette.length]) : '<div style="color:var(--txt-faint);font-size:13px">No data.</div>'}</div>
-  </div>`;
+  </div>
+  <div class="mpanel week-summary-panel"><div class="ws-head"><span>✅ Week summary</span><span class="ws-count">${weekDone.length} completed this week</span></div>${weekSummaryHTML}</div>`;
 }
 
 // ── PRODUCTS ──────────────────────────────────────────────────────────────────
