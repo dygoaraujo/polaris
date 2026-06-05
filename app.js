@@ -86,6 +86,8 @@ function weekRange(o = 0) { const t = today(); const dow = t.getDay(); const mon
 const esc = s => (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const uniq = a => [...new Set(a)];
 const replyDue = t => Array.isArray(t.contacts) && t.contacts.some(c => c.ball === 'me');
+const PROD_PRIO_COLOR = { urgent: 'var(--red)', high: 'var(--amber)', medium: 'var(--blue)', low: 'var(--txt-faint)' };
+const prodPrioDot = name => { if (!name) return ''; const pd = (settings.productData || {})[name] || {}; if (!pd.priority) return ''; return `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${PROD_PRIO_COLOR[pd.priority]};margin-left:5px;flex:none;vertical-align:middle;opacity:.85" title="${PRIOS[pd.priority]} priority"></span>`; };
 const replyBadge = t => replyDue(t) ? '<span class="reply-badge">↩︎ reply due</span>' : '';
 const sprintBadge = t => (t.sector === 'Engineering Projects' && t.sprint) ? `<span class="sprint-ic" title="Sprint activity"><svg width="12" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>` : '';
 const directiveBadge = t => (t.sector === 'Engineering Coordination' || t.sector === 'Industrial Management') ? `<span class="directive-ic" title="${esc(t.sector)}">⚠</span>` : '';
@@ -290,7 +292,11 @@ function renderTable() {
     if (sortCol === 'priority') { va = po[a.priority]; vb = po[b.priority]; }
     if (sortCol === 'status') { va = so[a.status]; vb = so[b.status]; }
     if (sortCol === 'num') { va = a.num || 0; vb = b.num || 0; }
-    if (sortCol === 'deadline') { va = parseDate(a.deadline) ? parseDate(a.deadline).getTime() : 9e15; vb = parseDate(b.deadline) ? parseDate(b.deadline).getTime() : 9e15; }
+    if (sortCol === 'deadline') {
+      const aDone = a.status === 'done', bDone = b.status === 'done';
+      if (aDone !== bDone) return aDone ? 1 : -1;
+      va = parseDate(a.deadline) ? parseDate(a.deadline).getTime() : 9e15; vb = parseDate(b.deadline) ? parseDate(b.deadline).getTime() : 9e15;
+    }
     if (sortCol === 'createdAt') { va = new Date(a.createdAt || 0).getTime(); vb = new Date(b.createdAt || 0).getTime(); }
     if (sortCol === 'daysLeft') { va = relDays(a.deadline) ?? 9999; vb = relDays(b.deadline) ?? 9999; }
     if (typeof va === 'string') va = va.toLowerCase();
@@ -306,16 +312,16 @@ function renderTable() {
     const daysCell = t.status === 'done'
       ? `<span class="badge b-done" style="font-size:10px">done</span>`
       : r === null ? `<span style="color:var(--txt-faint)">—</span>`
-      : r < 0 ? `<span class="due over">${-r}d late</span>`
+      : r < 0 ? `<span class="due over">${-r} day${-r === 1 ? '' : 's'} late</span>`
       : r === 0 ? `<span class="due soon">today</span>`
       : r === 1 ? `<span class="due soon">tomorrow</span>`
-      : r <= 7 ? `<span class="due soon">${r}d</span>`
-      : `<span style="color:var(--txt-dim);font-family:var(--mono);font-size:11.5px">${r}d</span>`;
+      : r <= 7 ? `<span class="due soon">${r} days</span>`
+      : `<span style="color:var(--txt-dim);font-family:var(--mono);font-size:11.5px">${r} days</span>`;
     return `<tr data-open="${t.id}">
       <td class="idcell">${t.num || ''}</td>
-      <td class="${t.status === 'done' ? 'done' : ''}"><div class="tt"><span class="prio-bar prio-${t.priority}" style="height:16px;flex:none"></span><span class="ttxt">${esc(t.title) || 'untitled'}</span>${sprintBadge(t)}${directiveBadge(t)}${replyBadge(t)}</div></td>
+      <td class="tdtask ${t.status === 'done' ? 'done' : ''}"><div class="tt"><span class="prio-bar prio-${t.priority}" style="height:16px;flex:none"></span><span class="ttxt">${esc(t.title) || 'untitled'}</span>${sprintBadge(t)}${directiveBadge(t)}${replyBadge(t)}</div></td>
       <td>${t.type ? `<span class="tag type">${esc(t.type)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
-      <td>${t.product ? `<span class="tag">${esc(t.product)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
+      <td>${t.product ? `<span class="tag" style="display:inline-flex;align-items:center">${esc(t.product)}${prodPrioDot(t.product)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
       <td>${t.sector ? `<span style="color:var(--txt-dim);font-size:12px">${esc(t.sector)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
       <td><span class="due ${dcls}">${fmtDate(t.deadline)}</span></td>
       <td>${daysCell}</td>
