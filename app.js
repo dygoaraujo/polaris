@@ -136,7 +136,7 @@ const matchSearch = t => !search || (t.title + ' ' + t.description + ' ' + t.req
 const countFor = f => tasks.filter(t => matchesFilter(t, f) && matchSearch(t)).length;
 const FILTER_GROUPS = [
   [{ k: 'all', label: 'All' }],
-  [{ k: 'todo', label: 'To do' }, { k: 'in_progress', label: 'In progress' }, { k: 'blocked', label: 'Blocked' }, { k: 'done', label: 'Done' }, { k: 'reply', label: 'Reply due' }],
+  [{ k: 'todo', label: 'To do' }, { k: 'in_progress', label: 'In progress' }, { k: 'blocked', label: 'Blocked' }, { k: 'done', label: 'Done' }],
   [{ k: 'overdue', label: 'Overdue', danger: 1 }, { k: 'today', label: 'Today' }, { k: 'week', label: 'This week' }, { k: 'next', label: 'Next week' }, { k: 'month', label: 'This month' }, { k: 'next_month', label: 'Next month' }]
 ];
 const BOARD_FILTERS = [{ k: 'all', label: 'All' }, { k: 'overdue', label: 'Overdue', danger: 1 }, { k: 'today', label: 'Today' }, { k: 'tomorrow', label: 'Tomorrow' }, { k: 'week', label: 'This week' }, { k: 'next', label: 'Next week' }, { k: 'month', label: 'This month' }, { k: 'next_month', label: 'Next month' }, { k: 'reply', label: 'Reply due' }];
