@@ -63,7 +63,7 @@ function scheduleGistSave() { clearTimeout(gistTimer); gistTimer = setTimeout(gi
 
 // ── State ────────────────────────────────────────────────────────────────────
 let tasks = [], vocab = [], ideas = [], settings = {};
-let current = 'today', filter = 'all', boardFilter = 'all', metricPeriod = 'total';
+let current = 'today', filter = 'all', boardFilter = 'all', metricPeriod = 'total', dashPeriod = 'month';
 let search = '', sortCol = 'createdAt', sortDir = -1, calY, calM, calSel = null;
 let addRowOpen = false;
 
@@ -71,7 +71,7 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 const PRIOS = { urgent: 'Urgent', high: 'High', medium: 'Medium', low: 'Low' };
 const STATUSES = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' };
 const STAT_COLOR = { todo: 'var(--txt-faint)', in_progress: 'var(--blue)', blocked: 'var(--red)', done: 'var(--green)' };
-const TITLES = { today: 'Today', board: 'Board', calendar: 'Calendar', table: 'All Activities', metrics: 'Metrics', products: 'Products', vocab: 'Vocabulary', ideas: 'Backlog & Ideas', settings: 'Settings' };
+const TITLES = { today: 'Today', board: 'Board', calendar: 'Calendar', table: 'All Activities', dashboard: 'Dashboard', metrics: 'Metrics', products: 'Products', vocab: 'Vocabulary', ideas: 'Backlog & Ideas', settings: 'Settings' };
 const DEFAULTS = { name: 'Rodrigo', types: ['Project document', 'Mechanical test', 'System registration', 'Research', 'Supplier dealing', 'Meeting', 'Production support'], sectors: ['Engineering', 'Production', 'Maintenance', 'Planning', 'Quality', 'Personal'], products: ['P-204 Pump', 'Conveyor C-12', 'Line 3'], sources: ['Project Sprint', 'Coordinator', 'Director', 'Production', 'Self'], projects: [], template: ['Product specification', 'Technical drawing', 'Test report', 'System registration'], calendar: {}, focusDate: '', focusIds: [], collapsed: false };
 
 const DAY = 86400000;
@@ -549,6 +549,273 @@ function renderMetrics() {
   <div class="mpanel week-summary-panel"><div class="ws-head"><span>✅ Week summary</span><span class="ws-count">${weekDone.length} completed this week</span></div>${weekSummaryHTML}</div>`;
 }
 
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+function dashRange(p) {
+  const t = today();
+  if (p === 'today') return [t, new Date(t.getTime() + DAY)];
+  if (p === 'week') return weekRange(0);
+  if (p === 'month') return [new Date(t.getFullYear(), t.getMonth(), 1), new Date(t.getFullYear(), t.getMonth() + 1, 1)];
+  if (p === 'quarter') { const q = Math.floor(t.getMonth() / 3); return [new Date(t.getFullYear(), q * 3, 1), new Date(t.getFullYear(), q * 3 + 3, 1)]; }
+  if (p === 'year') return [new Date(t.getFullYear(), 0, 1), new Date(t.getFullYear() + 1, 0, 1)];
+  return null;
+}
+function dashIn(t, range) {
+  if (!range) return true;
+  const [a, b] = range;
+  const inR = d => { if (!d) return false; const s = typeof d === 'string' && !d.includes('T') ? d + 'T00:00:00' : d; const x = startOfDay(new Date(s)); return x >= a && x < b; };
+  return inR(t.deadline) || inR(t.completedAt);
+}
+function buildTrendBuckets(p, range) {
+  const bks = [];
+  if (p === 'today' || p === 'week') {
+    const [wA] = weekRange(0);
+    for (let i = 0; i < 7; i++) { const d = new Date(wA.getTime() + i * DAY); bks.push({ label: d.toLocaleDateString('en-US', { weekday: 'short' }), a: d, b: new Date(d.getTime() + DAY) }); }
+  } else if (p === 'month') {
+    const [mA, mB] = dashRange('month');
+    let c = new Date(mA);
+    while (c < mB) { const e = new Date(Math.min(c.getTime() + 7 * DAY, mB.getTime())); bks.push({ label: c.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), a: new Date(c), b: new Date(e) }); c = new Date(e); }
+  } else {
+    let s, e;
+    if (range) { [s, e] = range; } else { const n = today(); s = new Date(n.getFullYear() - 1, n.getMonth() + 1, 1); e = new Date(n.getFullYear(), n.getMonth() + 1, 1); }
+    let c = new Date(s.getFullYear(), s.getMonth(), 1);
+    const fin = new Date(e.getFullYear(), e.getMonth() + 1, 1);
+    while (c < fin && bks.length < 16) { const nx = new Date(c.getFullYear(), c.getMonth() + 1, 1); bks.push({ label: c.toLocaleDateString('en-US', { month: 'short' }) + (c.getFullYear() !== today().getFullYear() ? " '" + String(c.getFullYear()).slice(2) : ''), a: new Date(c), b: new Date(nx) }); c = nx; }
+  }
+  return bks;
+}
+function buildLineChartSVG(p, range) {
+  const bks = buildTrendBuckets(p, range);
+  if (!bks.length) return '<div class="dash-no-data">No data for this period.</div>';
+  const W = 580, H = 190, Pt = 18, Pr = 14, Pb = 34, Pl = 32;
+  const cW = W - Pl - Pr, cH = H - Pt - Pb;
+  const created = bks.map(bk => tasks.filter(t => t.createdAt && startOfDay(new Date(t.createdAt)) >= bk.a && startOfDay(new Date(t.createdAt)) < bk.b).length);
+  const completed = bks.map(bk => tasks.filter(t => t.completedAt && startOfDay(new Date(t.completedAt)) >= bk.a && startOfDay(new Date(t.completedAt)) < bk.b).length);
+  const maxV = Math.max(1, ...created, ...completed);
+  const n = bks.length;
+  const xp = i => (Pl + (n > 1 ? i / (n - 1) : 0.5) * cW).toFixed(1);
+  const yp = v => (Pt + cH - (v / maxV) * cH).toFixed(1);
+  const drawLine = (arr, color) => {
+    if (n === 1) return `<circle cx="${xp(0)}" cy="${yp(arr[0])}" r="5" fill="${color}"/>`;
+    const pts = arr.map((v, i) => `${xp(i)},${yp(v)}`).join(' ');
+    const area = `${xp(0)},${(Pt + cH).toFixed(1)} ${pts} ${xp(n - 1)},${(Pt + cH).toFixed(1)}`;
+    return `<polygon points="${area}" fill="${color}" fill-opacity="0.09"/>
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    ${arr.map((v, i) => v > 0 ? `<circle cx="${xp(i)}" cy="${yp(v)}" r="3.5" fill="${color}" stroke="#111726" stroke-width="2"/>` : '').join('')}`;
+  };
+  const step = Math.ceil(n / 8);
+  const xLabels = bks.map((b, i) => i % step === 0 ? `<text x="${xp(i)}" y="${H - 5}" text-anchor="middle" fill="#5b6886" font-size="10" font-family="IBM Plex Mono,monospace">${b.label}</text>` : '').join('');
+  const gridN = Math.min(4, maxV);
+  const gridLines = Array.from({ length: gridN }, (_, gi) => {
+    const f = (gi + 1) / gridN; const y = (Pt + cH - f * cH).toFixed(1); const val = Math.round(f * maxV);
+    return `<line x1="${Pl}" y1="${y}" x2="${W - Pr}" y2="${y}" stroke="#1b2540" stroke-width="1"/>
+    <text x="${Pl - 5}" y="${parseFloat(y) + 4}" text-anchor="end" fill="#5b6886" font-size="10" font-family="IBM Plex Mono,monospace">${val}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;overflow:visible">
+    ${gridLines}
+    ${drawLine(created, '#5b8cff')}
+    ${drawLine(completed, '#39d98a')}
+    ${xLabels}
+  </svg>`;
+}
+function buildDonutSVG(data) {
+  const pal = ['#4d8dff', '#3ad0c4', '#b388ff', '#f6a821', '#5b9bff', '#39d98a', '#ff5e6c', '#2aa8d4'];
+  if (!data.length) return '<div class="dash-no-data">No data.</div>';
+  const total = data.reduce((s, d) => s + d.n, 0);
+  if (!total) return '<div class="dash-no-data">No data.</div>';
+  const cx = 80, cy = 80, R = 62, ri = 42;
+  const toXY = (a, r) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+  let sa = -Math.PI / 2;
+  const paths = data.map((d, i) => {
+    const ang = (d.n / total) * 2 * Math.PI;
+    const ea = sa + ang, gap = 0.025;
+    const saG = sa + gap, eaG = ea - gap;
+    if (eaG <= saG) { sa = ea; return ''; }
+    const [ox1, oy1] = toXY(saG, R), [ox2, oy2] = toXY(eaG, R);
+    const [ix1, iy1] = toXY(eaG, ri), [ix2, iy2] = toXY(saG, ri);
+    const lg = (eaG - saG) > Math.PI ? 1 : 0;
+    const f = n => n.toFixed(2);
+    const path = `M ${f(ox1)} ${f(oy1)} A ${R} ${R} 0 ${lg} 1 ${f(ox2)} ${f(oy2)} L ${f(ix1)} ${f(iy1)} A ${ri} ${ri} 0 ${lg} 0 ${f(ix2)} ${f(iy2)} Z`;
+    sa = ea;
+    return `<path d="${path}" fill="${pal[i % pal.length]}"/>`;
+  }).join('');
+  const legend = data.slice(0, 7).map((d, i) => `<div class="don-leg-row"><span class="don-dot" style="background:${pal[i % pal.length]}"></span><span class="don-lbl" title="${esc(d.label)}">${esc(d.label)}</span><span class="don-n">${d.n}<span class="don-pct"> (${Math.round(d.n / total * 100)}%)</span></span></div>`).join('');
+  return `<div class="donut-wrap">
+    <svg width="160" height="160" viewBox="0 0 160 160" style="flex:none">
+      <circle cx="${cx}" cy="${cy}" r="${(R + ri) / 2}" fill="none" stroke="#1b2540" stroke-width="${R - ri + 2}"/>
+      ${paths}
+      <text x="${cx}" y="${cy + 7}" text-anchor="middle" fill="#e7ecf6" font-family="Bricolage Grotesque,sans-serif" font-weight="800" font-size="24">${total}</text>
+    </svg>
+    <div class="don-legend">${legend}</div>
+  </div>`;
+}
+function renderDashboard() {
+  const DPDS = [{ k: 'today', l: 'Today' }, { k: 'week', l: 'This Week' }, { k: 'month', l: 'This Month' }, { k: 'quarter', l: 'This Quarter' }, { k: 'year', l: 'This Year' }, { k: 'total', l: 'All Time' }];
+  const range = dashRange(dashPeriod);
+  const mt = tasks.filter(t => dashIn(t, range));
+  // KPIs
+  const total = mt.length, done = mt.filter(t => t.status === 'done').length;
+  const rate = total ? Math.round(done / total * 100) : 0;
+  const open = mt.filter(t => t.status !== 'done').length;
+  const overdue = mt.filter(t => t.status !== 'done' && relDays(t.deadline) < 0).length;
+  const blocked = mt.filter(t => t.status === 'blocked').length;
+  const inProg = mt.filter(t => t.status === 'in_progress').length;
+  const dueToday = tasks.filter(t => t.status !== 'done' && relDays(t.deadline) === 0).length;
+  const dueWeek = tasks.filter(t => t.status !== 'done' && relDays(t.deadline) !== null && relDays(t.deadline) >= 0 && relDays(t.deadline) <= 6).length;
+  // Performance metrics
+  const doneTasks = mt.filter(t => t.status === 'done' && t.createdAt && t.completedAt);
+  const avgCompTime = doneTasks.length ? (doneTasks.reduce((s, t) => s + (new Date(t.completedAt) - new Date(t.createdAt)) / DAY, 0) / doneTasks.length).toFixed(1) : null;
+  const onTimeTasks = doneTasks.filter(t => t.deadline && startOfDay(new Date(t.completedAt)) <= startOfDay(parseDate(t.deadline)));
+  const onTimeRate = doneTasks.length ? Math.round(onTimeTasks.length / doneTasks.length * 100) : null;
+  const lateTasks = doneTasks.filter(t => t.deadline && startOfDay(new Date(t.completedAt)) > startOfDay(parseDate(t.deadline)));
+  const avgDelay = lateTasks.length ? (lateTasks.reduce((s, t) => s + (startOfDay(new Date(t.completedAt)) - startOfDay(parseDate(t.deadline))) / DAY, 0) / lateTasks.length).toFixed(1) : null;
+  const topOf = field => { const m = {}; mt.forEach(t => { if (t[field]) m[t[field]] = (m[t[field]] || 0) + 1; }); const e = Object.entries(m).sort((a, b) => b[1] - a[1])[0]; return e ? e[0] : null; };
+  const topType = topOf('type'), topProd = topOf('product'), topSector = topOf('sector');
+  // Distributions
+  const byPrio = Object.entries(PRIOS).map(([k, l]) => ({ k, label: l, n: mt.filter(t => t.priority === k).length }));
+  const byStat = Object.entries(STATUSES).map(([k, l]) => ({ k, label: l, n: mt.filter(t => t.status === k).length }));
+  const byType = groupCount(mt, 'type').slice(0, 8);
+  const byProd = groupCount(mt, 'product').slice(0, 8);
+  const bySector = groupCount(mt, 'sector');
+  // Gauge SVG (270° arc, starts at 7.5 o'clock)
+  const gR = 54, gcx = 70, gcy = 74, gcirc = 2 * Math.PI * gR;
+  const arcLen = 0.75 * gcirc, filled = (rate / 100) * arcLen;
+  const gaugeSVG = `<svg viewBox="0 0 140 120" style="width:128px;height:auto">
+    <circle cx="${gcx}" cy="${gcy}" r="${gR}" fill="none" stroke="#1b2540" stroke-width="12"
+      stroke-dasharray="${arcLen.toFixed(2)} ${gcirc.toFixed(2)}" transform="rotate(-225 ${gcx} ${gcy})" stroke-linecap="round"/>
+    <circle cx="${gcx}" cy="${gcy}" r="${gR}" fill="none" stroke="#39d98a" stroke-width="12"
+      stroke-dasharray="${filled.toFixed(2)} ${gcirc.toFixed(2)}" transform="rotate(-225 ${gcx} ${gcy})" stroke-linecap="round"/>
+    <text x="${gcx}" y="${gcy + 9}" text-anchor="middle" fill="#e7ecf6" font-family="Bricolage Grotesque,sans-serif" font-weight="800" font-size="28">${rate}%</text>
+    <text x="${gcx}" y="${gcy + 27}" text-anchor="middle" fill="#5b6886" font-family="IBM Plex Mono,monospace" font-size="9.5">${done} / ${total}</text>
+  </svg>`;
+  // Horizontal bars
+  const prioColor = { urgent: 'var(--red)', high: 'var(--amber)', medium: 'var(--blue)', low: 'var(--txt-faint)' };
+  const pal = ['var(--accent)', '#3d80e8', '#5b9bff', '#7ab5ff', 'var(--teal)', '#2aa8d4', '#6abcdf', 'var(--violet)'];
+  const hbar = (arr, cf) => { if (!arr.length) return '<div class="dash-no-data">No data.</div>'; const mx = Math.max(1, ...arr.map(x => x.n)); return arr.map((a, i) => `<div class="db-row"><span class="db-lab" title="${esc(a.label)}">${esc(a.label)}</span><div class="db-track"><div class="db-fill" style="width:${(a.n / mx * 100).toFixed(1)}%;background:${cf(a, i)}"></div></div><span class="db-num">${a.n}</span></div>`).join(''); };
+  const supplierWaiting = tasks.filter(t => t.status !== 'done' && Array.isArray(t.contacts) && t.contacts.some(c => c.ball === 'them')).length;
+  const replyNeeded = tasks.filter(t => t.status !== 'done' && replyDue(t)).length;
+  const periodLabel = { today: 'today', week: 'this week', month: 'this month', quarter: 'this quarter', year: 'this year', total: 'all time' }[dashPeriod];
+  const summaryTasks = mt.filter(t => t.status === 'done' && t.completedAt).sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+  const onTimeColor = onTimeRate === null ? 'var(--txt)' : onTimeRate >= 80 ? 'var(--green)' : onTimeRate >= 60 ? 'var(--amber)' : 'var(--red)';
+  document.getElementById('view-dashboard').innerHTML = `
+  <div class="sec-head"><div><h2>Dashboard</h2><p>Engineering Operations Center · ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p></div></div>
+  <div class="toolbar" style="margin-bottom:20px"><div class="chips">${DPDS.map(p => `<button class="chip ${dashPeriod === p.k ? 'on' : ''}" data-dp="${p.k}">${p.l}</button>`).join('')}</div></div>
+
+  <div class="dash-section-label">🎯 Mission Status</div>
+  <div class="dash-kpi-row">
+    <div class="dash-kpi-card dash-kpi-main">
+      <div class="dkpi-title">Completion Rate</div>
+      <div class="dkpi-gauge">${gaugeSVG}</div>
+      <div class="dkpi-sub">${done} of ${total} tasks · ${periodLabel}</div>
+    </div>
+    <div class="dash-kpi-card">
+      <div class="dkpi-title">Open Workload</div>
+      <div class="dkpi-big" style="color:var(--blue)">${open}</div>
+      <div class="dkpi-sub">open tasks</div>
+      <div class="dkpi-rows">
+        <div class="dkpi-row"><span class="dkpi-dot" style="background:var(--red)"></span><span>Overdue</span><b style="color:var(--red)">${overdue}</b></div>
+        <div class="dkpi-row"><span class="dkpi-dot" style="background:var(--amber)"></span><span>Blocked</span><b style="color:var(--amber)">${blocked}</b></div>
+        <div class="dkpi-row"><span class="dkpi-dot" style="background:var(--blue)"></span><span>In progress</span><b style="color:var(--blue)">${inProg}</b></div>
+      </div>
+    </div>
+    <div class="dash-kpi-card">
+      <div class="dkpi-title">Upcoming Deadlines</div>
+      <div class="dkpi-big" style="color:var(--amber)">${dueToday}</div>
+      <div class="dkpi-sub">due today</div>
+      <div class="dkpi-rows">
+        <div class="dkpi-row"><span class="dkpi-dot" style="background:var(--amber)"></span><span>Due this week</span><b style="color:var(--amber)">${dueWeek}</b></div>
+        <div class="dkpi-row"><span class="dkpi-dot" style="background:var(--txt-faint)"></span><span>No deadline set</span><b>${tasks.filter(t => t.status !== 'done' && !t.deadline).length}</b></div>
+      </div>
+    </div>
+    <div class="dash-kpi-card">
+      <div class="dkpi-title">Supplier / Contact Log</div>
+      <div class="dkpi-big" style="color:var(--teal)">${supplierWaiting + replyNeeded}</div>
+      <div class="dkpi-sub">open threads</div>
+      <div class="dkpi-rows">
+        <div class="dkpi-row"><span class="dkpi-dot" style="background:var(--blue)"></span><span>Awaiting their reply</span><b style="color:var(--blue)">${supplierWaiting}</b></div>
+        <div class="dkpi-row"><span class="dkpi-dot" style="background:var(--red)"></span><span>Your reply needed</span><b style="color:var(--red)">${replyNeeded}</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dash-section-label">📈 Productivity Trend</div>
+  <div class="dash-trend-row">
+    <div class="dash-mpanel">
+      <div class="dash-panel-head">Tasks Created vs. Completed <span class="dash-period-tag">${periodLabel}</span></div>
+      <div class="dash-linechart-wrap">${buildLineChartSVG(dashPeriod, range)}</div>
+      <div class="dash-legend"><span><i style="background:#5b8cff"></i>Created</span><span><i style="background:#39d98a"></i>Completed</span></div>
+    </div>
+    <div class="dash-trend-side">
+      <div class="dash-mpanel">
+        <div class="dash-panel-head">By Priority</div>
+        <div class="db-chart">${hbar(byPrio, a => prioColor[a.k])}</div>
+      </div>
+      <div class="dash-mpanel">
+        <div class="dash-panel-head">By Status</div>
+        <div class="db-chart">${hbar(byStat, a => STAT_COLOR[a.k])}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dash-section-label">⚙️ Effort Analysis</div>
+  <div class="dash-effort-row">
+    <div class="dash-mpanel">
+      <div class="dash-panel-head">By Activity Type</div>
+      ${buildDonutSVG(byType)}
+    </div>
+    <div class="dash-mpanel">
+      <div class="dash-panel-head">By Product</div>
+      <div class="db-chart">${byProd.length ? hbar(byProd, (a, i) => pal[i % pal.length]) : '<div class="dash-no-data">No data.</div>'}</div>
+    </div>
+    <div class="dash-mpanel">
+      <div class="dash-panel-head">By Requesting Sector</div>
+      <div class="db-chart">${bySector.length ? hbar(bySector, (a, i) => pal[i % pal.length]) : '<div class="dash-no-data">No data.</div>'}</div>
+    </div>
+  </div>
+
+  <div class="dash-section-label">🏆 Performance Indicators</div>
+  <div class="dash-perf-row">
+    <div class="dash-perf-card">
+      <div class="dp-icon">⏱</div>
+      <div class="dp-val">${avgCompTime !== null ? avgCompTime + 'd' : '—'}</div>
+      <div class="dp-lbl">Avg. Completion Time</div>
+    </div>
+    <div class="dash-perf-card">
+      <div class="dp-icon">🎯</div>
+      <div class="dp-val" style="color:${onTimeColor}">${onTimeRate !== null ? onTimeRate + '%' : '—'}</div>
+      <div class="dp-lbl">Delivered On Time</div>
+    </div>
+    <div class="dash-perf-card">
+      <div class="dp-icon">⏰</div>
+      <div class="dp-val" style="color:${avgDelay !== null ? 'var(--red)' : 'var(--txt)'}">${avgDelay !== null ? avgDelay + 'd' : '—'}</div>
+      <div class="dp-lbl">Avg. Delay (late tasks)</div>
+    </div>
+    <div class="dash-perf-card">
+      <div class="dp-icon">🔧</div>
+      <div class="dp-val dash-dp-sm">${topType ? esc(topType) : '—'}</div>
+      <div class="dp-lbl">Most Frequent Type</div>
+    </div>
+    <div class="dash-perf-card">
+      <div class="dp-icon">📦</div>
+      <div class="dp-val dash-dp-sm">${topProd ? esc(topProd) : '—'}</div>
+      <div class="dp-lbl">Most Demanded Product</div>
+    </div>
+    <div class="dash-perf-card">
+      <div class="dp-icon">🏢</div>
+      <div class="dp-val dash-dp-sm">${topSector ? esc(topSector) : '—'}</div>
+      <div class="dp-lbl">Top Requesting Sector</div>
+    </div>
+  </div>
+
+  <div class="dash-section-label">📋 Activity Summary · ${periodLabel}</div>
+  <div class="dash-mpanel" style="margin-bottom:40px">
+    <div class="ws-head"><span>Completed Tasks</span><span class="ws-count">${summaryTasks.length} completed ${periodLabel}</span></div>
+    ${summaryTasks.length
+      ? `<table class="ws-tbl"><thead><tr><th>Activity</th><th>Product</th><th>Sector</th><th>Priority</th><th>Completed</th></tr></thead><tbody>${summaryTasks.map(t => `<tr data-open="${t.id}" style="cursor:pointer"><td class="ws-title">${esc(t.title)}</td><td>${t.product ? `<span class="tag">${esc(t.product)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td><td style="font-size:12px;color:var(--txt-dim)">${esc(t.sector) || '—'}</td><td><span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span></td><td style="color:var(--green);font-family:var(--mono);font-size:11.5px">${fmtDate(t.completedAt.slice(0, 10))}</td></tr>`).join('')}</tbody></table>`
+      : `<div style="color:var(--txt-faint);font-size:13.5px;padding:12px 0">No completed tasks ${periodLabel}. Keep pushing! 🚀</div>`
+    }
+  </div>`;
+}
+
 // ── PRODUCTS ──────────────────────────────────────────────────────────────────
 function renderProducts() {
   const names = uniq([...(settings.products || []), ...tasks.map(t => t.product).filter(Boolean)]);
@@ -783,12 +1050,12 @@ function showProgressPicker(id, anchorEl) {
 // ── VIEWS / EVENTS ────────────────────────────────────────────────────────────
 function show(view) {
   current = view;
-  ['today', 'board', 'calendar', 'table', 'metrics', 'products', 'vocab', 'ideas', 'settings'].forEach(v => document.getElementById('view-' + v).classList.toggle('hide', v !== view));
+  ['today', 'board', 'calendar', 'table', 'dashboard', 'metrics', 'products', 'vocab', 'ideas', 'settings'].forEach(v => document.getElementById('view-' + v).classList.toggle('hide', v !== view));
   document.querySelectorAll('.nav-item').forEach(t => t.classList.toggle('on', t.dataset.tab === view));
   document.getElementById('pageTitle').textContent = TITLES[view];
   closeDrawer(); updateTabCounts(); renderCurrent();
 }
-function renderCurrent() { ({ today: renderToday, board: renderBoard, calendar: renderCalendar, metrics: renderMetrics, products: renderProducts, vocab: renderVocab, ideas: renderIdeas, settings: renderSettings, table: () => { renderFilters(); renderTable(); } }[current])(); }
+function renderCurrent() { ({ today: renderToday, board: renderBoard, calendar: renderCalendar, dashboard: renderDashboard, metrics: renderMetrics, products: renderProducts, vocab: renderVocab, ideas: renderIdeas, settings: renderSettings, table: () => { renderFilters(); renderTable(); } }[current])(); }
 function updateTabCounts() {
   document.getElementById('c-today').textContent = tasks.filter(t => t.status !== 'done' && ((relDays(t.deadline) !== null && relDays(t.deadline) <= 0) || replyDue(t))).length;
   document.getElementById('c-board').textContent = tasks.filter(t => t.status !== 'done').length;
@@ -808,6 +1075,7 @@ document.addEventListener('click', e => {
   const sq = e.target.closest('[data-sq]'); if (sq) { const [col, dir] = sq.dataset.sq.split(':'); sortCol = col; sortDir = parseInt(dir); renderFilters(); renderTable(); return; }
   const bf = e.target.closest('[data-bf]'); if (bf) { boardFilter = bf.dataset.bf; renderBoard(); return; }
   const mp = e.target.closest('[data-mp]'); if (mp) { metricPeriod = mp.dataset.mp; renderMetrics(); return; }
+  const dp = e.target.closest('[data-dp]'); if (dp) { dashPeriod = dp.dataset.dp; renderDashboard(); return; }
   const th = e.target.closest('th[data-sort]'); if (th) { const c = th.dataset.sort; if (sortCol === c) sortDir *= -1; else { sortCol = c; sortDir = 1; } renderTable(); return; }
   const star = e.target.closest('[data-star]'); if (star) { e.stopPropagation(); toggleFocus(star.dataset.star); return; }
   const td = e.target.closest('[data-toggle-done]'); if (td) { e.stopPropagation(); const t = getTask(td.dataset.toggleDone); const wasDone = t.status === 'done'; inlineEdit(td.dataset.toggleDone, 'status', wasDone ? 'in_progress' : 'done').then(() => { renderToday(); toast(wasDone ? 'Reopened' : 'Done ✓'); }); return; }
