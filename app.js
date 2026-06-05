@@ -112,6 +112,8 @@ function matchesFilter(t, f) {
   if (f === 'week') { const [a, b] = weekRange(0); return d >= a && d < b; }
   if (f === 'next') { const [a, b] = weekRange(1); return d >= a && d < b; }
   if (f === 'future') { const [, b] = weekRange(1); return d >= b; }
+  if (f === 'month') { const n = today(); const a = new Date(n.getFullYear(), n.getMonth(), 1), b = new Date(n.getFullYear(), n.getMonth() + 1, 1); return d >= a && d < b; }
+  if (f === 'next_month') { const n = today(); const a = new Date(n.getFullYear(), n.getMonth() + 1, 1), b = new Date(n.getFullYear(), n.getMonth() + 2, 1); return d >= a && d < b; }
   return true;
 }
 function boardMatch(t, f) {
@@ -133,7 +135,7 @@ const countFor = f => tasks.filter(t => matchesFilter(t, f) && matchSearch(t)).l
 const FILTER_GROUPS = [
   [{ k: 'all', label: 'All' }],
   [{ k: 'todo', label: 'To do' }, { k: 'in_progress', label: 'In progress' }, { k: 'blocked', label: 'Blocked' }, { k: 'done', label: 'Done' }, { k: 'reply', label: 'Reply due' }],
-  [{ k: 'overdue', label: 'Overdue', danger: 1 }, { k: 'today', label: 'Today' }, { k: 'week', label: 'This week' }, { k: 'next', label: 'Next week' }]
+  [{ k: 'overdue', label: 'Overdue', danger: 1 }, { k: 'today', label: 'Today' }, { k: 'week', label: 'This week' }, { k: 'next', label: 'Next week' }, { k: 'month', label: 'This month' }, { k: 'next_month', label: 'Next month' }]
 ];
 const BOARD_FILTERS = [{ k: 'all', label: 'All' }, { k: 'overdue', label: 'Overdue', danger: 1 }, { k: 'today', label: 'Today' }, { k: 'tomorrow', label: 'Tomorrow' }, { k: 'week', label: 'This week' }, { k: 'next', label: 'Next week' }, { k: 'month', label: 'This month' }, { k: 'next_month', label: 'Next month' }, { k: 'reply', label: 'Reply due' }];
 
