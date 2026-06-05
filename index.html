@@ -20,6 +20,7 @@
     <button class="nav-item" data-tab="calendar"><span class="ic">📅</span><span class="lbl">Calendar</span></button>
     <div class="nav-group-label">Insights</div>
     <button class="nav-item" data-tab="dashboard"><span class="ic">🎯</span><span class="lbl">Dashboard</span></button>
+    <button class="nav-item" data-tab="supplier"><span class="ic">🏭</span><span class="lbl">Supplier Hub</span></button>
     <button class="nav-item" data-tab="products"><span class="ic">📦</span><span class="lbl">Products</span></button>
     <div class="nav-group-label">English</div>
     <button class="nav-item" data-tab="vocab"><span class="ic">📖</span><span class="lbl">Vocabulary</span><span class="cnt" id="c-vocab">0</span></button>
@@ -54,6 +55,10 @@
       <div class="tbl-wrap"><table id="tbl"></table></div>
     </section>
     <section id="view-dashboard" class="hide"></section>
+    <section id="view-supplier" class="hide">
+      <div class="sec-head"><div><h2>Supplier Hub</h2><p>Track sourcing searches, compare quotations and make data-driven decisions.</p></div><button class="btn primary" id="supNew">＋ New Search</button></div>
+      <div class="sup-grid" id="supGrid"></div>
+    </section>
     <section id="view-products" class="hide">
       <div class="sec-head"><div><h2>Products</h2><p>Everything grouped by product — with progress and hours.</p></div></div>
       <div class="prod-tools"><input id="projName" placeholder="New product / project name…"><button class="btn sm primary" id="projBlank">＋ Add product</button><button class="btn sm ghost" id="projCreate">＋ From template</button><span style="color:var(--txt-faint);font-size:12px">"From template" creates pre-set activities</span></div>
