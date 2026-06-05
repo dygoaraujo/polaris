@@ -321,7 +321,7 @@ function renderTable() {
       <td class="idcell">${t.num || ''}</td>
       <td class="tdtask ${t.status === 'done' ? 'done' : ''}"><div class="tt"><span class="prio-bar prio-${t.priority}" style="height:16px;flex:none"></span><span class="ttxt">${esc(t.title) || 'untitled'}</span>${sprintBadge(t)}${directiveBadge(t)}${replyBadge(t)}</div></td>
       <td>${t.type ? `<span class="tag type">${esc(t.type)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
-      <td>${t.product ? `<span class="tag" style="display:inline-flex;align-items:center">${esc(t.product)}${prodPrioDot(t.product)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
+      <td>${t.product ? `<span style="display:inline-flex;align-items:center;gap:6px"><span class="tag">${esc(t.product)}</span>${prodPrioDot(t.product)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
       <td>${t.sector ? `<span style="color:var(--txt-dim);font-size:12px">${esc(t.sector)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td>
       <td><span class="due ${dcls}">${fmtDate(t.deadline)}</span></td>
       <td>${daysCell}</td>
