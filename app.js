@@ -24,7 +24,7 @@ async function sset(k, v) {
 // ── Gist sync ────────────────────────────────────────────────────────────────
 const GIST_ID = 'd58f9448582e6aeef638dfd28b2482a7';
 const GIST_FILE = 'polaris-data.json';
-const GIST_KEYS = ['tasks', 'vocab', 'ideas', 'settings'];
+const GIST_KEYS = ['tasks', 'vocab', 'ideas', 'settings', 'supplierSearches'];
 let gistTimer = null;
 
 function getToken() { return localStorage.getItem('polaris_gh_token') || ''; }
@@ -71,7 +71,7 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 const PRIOS = { urgent: 'Urgent', high: 'High', medium: 'Medium', low: 'Low' };
 const STATUSES = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' };
 const STAT_COLOR = { todo: 'var(--txt-faint)', in_progress: 'var(--blue)', blocked: 'var(--red)', done: 'var(--green)' };
-const TITLES = { today: 'Today', board: 'Board', calendar: 'Calendar', table: 'All Activities', dashboard: 'Dashboard', products: 'Products', vocab: 'Vocabulary', ideas: 'Backlog & Ideas', settings: 'Settings' };
+const TITLES = { today: 'Today', board: 'Board', calendar: 'Calendar', table: 'All Activities', dashboard: 'Dashboard', supplier: 'Supplier Hub', products: 'Products', vocab: 'Vocabulary', ideas: 'Backlog & Ideas', settings: 'Settings' };
 const DEFAULTS = { name: 'Rodrigo', types: ['Project document', 'Mechanical test', 'System registration', 'Research', 'Supplier dealing', 'Meeting', 'Production support'], sectors: ['Engineering', 'Production', 'Maintenance', 'Planning', 'Quality', 'Personal'], products: ['P-204 Pump', 'Conveyor C-12', 'Line 3'], sources: ['Project Sprint', 'Coordinator', 'Director', 'Production', 'Self'], projects: [], template: ['Product specification', 'Technical drawing', 'Test report', 'System registration'], calendar: {}, focusDate: '', focusIds: [], collapsed: false };
 
 const DAY = 86400000;
@@ -759,6 +759,123 @@ function renderDashboard() {
   </div>`;
 }
 
+// ── SUPPLIER HUB ──────────────────────────────────────────────────────────────
+let supplierSearches = [];
+async function saveSupplierSearches() { await sset('supplierSearches', supplierSearches); }
+const SEARCH_STATUSES = { searching: 'Searching', contacting: 'Contacting Suppliers', awaiting: 'Awaiting Responses', analysis: 'Quotation Analysis', sample_eval: 'Sample Evaluation', approved: 'Approved', closed: 'Closed' };
+const SUP_STATUSES = { not_contacted: 'Not Contacted', email_sent: 'Email Sent', awaiting_reply: 'Awaiting Reply', quotation_received: 'Quotation Received', sample_requested: 'Sample Requested', sample_received: 'Sample Received', approved: 'Approved', rejected: 'Rejected' };
+const SEARCH_STATUS_COLOR = { searching: 'var(--txt-faint)', contacting: 'var(--blue)', awaiting: 'var(--amber)', analysis: 'var(--violet)', sample_eval: 'var(--teal)', approved: 'var(--green)', closed: 'var(--txt-dim)' };
+function supHealth(sup, requiredDate) {
+  if (!sup.lastContact) return { dot: '🔴', label: 'Not contacted' };
+  const ds = Math.floor((today() - startOfDay(new Date(sup.lastContact + 'T00:00:00'))) / DAY);
+  if (requiredDate && sup.leadTime > 0) { const dL = Math.round((startOfDay(parseDate(requiredDate)) - today()) / DAY); if (sup.leadTime > dL) return { dot: '🔴', label: 'Delivery risk' }; }
+  if (ds > 14) return { dot: '🔴', label: `${ds}d no contact` };
+  if (ds > 7) return { dot: '🟡', label: 'Follow-up needed' };
+  return { dot: '🟢', label: 'On track' };
+}
+function calcSupScore(sup, allSups) {
+  const wc = allSups.filter(s => s.unitCost > 0), wl = allSups.filter(s => s.leadTime > 0), wm = allSups.filter(s => s.moq > 0);
+  const ps = sup.unitCost > 0 && wc.length ? Math.min(...wc.map(s => s.unitCost)) / sup.unitCost * 100 : 0;
+  const ls = sup.leadTime > 0 && wl.length ? Math.min(...wl.map(s => s.leadTime)) / sup.leadTime * 100 : 0;
+  const ms = sup.moq > 0 && wm.length ? Math.min(...wm.map(s => s.moq)) / sup.moq * 100 : 0;
+  const ss = ({ approved: 100, sample_received: 80, quotation_received: 60, sample_requested: 40, awaiting_reply: 20, email_sent: 10, not_contacted: 0, rejected: 0 })[sup.status] || 0;
+  return Math.round(ps * 0.35 + ls * 0.35 + ms * 0.20 + ss * 0.10);
+}
+function generateAnalysisText(search) {
+  const sups = (search.suppliers || []).filter(s => s.unitCost > 0 || s.leadTime > 0);
+  if (sups.length < 2) return 'Add at least 2 suppliers with cost or lead time data to generate the automatic analysis.';
+  const scored = sups.map(s => ({ ...s, score: calcSupScore(s, sups) })).sort((a, b) => b.score - a.score);
+  const cheapest = [...sups].filter(s => s.unitCost > 0).sort((a, b) => a.unitCost - b.unitCost)[0];
+  const fastest = [...sups].filter(s => s.leadTime > 0).sort((a, b) => a.leadTime - b.leadTime)[0];
+  const best = scored[0];
+  let parts = [];
+  if (best) parts.push(`<b>${esc(best.name)}</b> presents the best overall balance with a composite score of ${best.score}/100.`);
+  if (cheapest && best && cheapest.name !== best.name) { let p = `Although <b>${esc(cheapest.name)}</b> offers the lowest unit cost ($${cheapest.unitCost})`; p += cheapest.leadTime > 0 && fastest && cheapest.leadTime > fastest.leadTime ? `, its lead time of ${cheapest.leadTime} days is longer than ${esc(fastest.name)}'s ${fastest.leadTime} days.` : '.'; parts.push(p); }
+  if (fastest && fastest.name !== best?.name && fastest.name !== cheapest?.name) parts.push(`<b>${esc(fastest.name)}</b> has the shortest lead time at ${fastest.leadTime} days.`);
+  if (search.requiredDate) {
+    const dL = Math.round((startOfDay(parseDate(search.requiredDate)) - today()) / DAY);
+    const atRisk = sups.filter(s => s.leadTime > 0 && s.leadTime > dL);
+    if (atRisk.length) parts.push(`⚠️ <b>${atRisk.map(s => esc(s.name)).join(', ')}</b> exceed${atRisk.length > 1 ? '' : 's'} the ${dL}-day window to the required date — delivery risk.`);
+    else if (sups.some(s => s.leadTime > 0)) parts.push(`All suppliers with lead time data fit within the ${dL}-day window to the required date. ✓`);
+  }
+  return parts.join(' ') || 'Not enough data for a meaningful analysis.';
+}
+function renderSupplierHub() {
+  const grid = document.getElementById('supGrid');
+  if (!supplierSearches.length) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="big">No sourcing searches yet</div><div>Click "＋ New Search" to start tracking a supplier process.</div></div>`; return; }
+  grid.innerHTML = supplierSearches.map(s => {
+    const sups = s.suppliers || [];
+    const quotes = sups.filter(x => ['quotation_received','sample_requested','sample_received','approved'].includes(x.status)).length;
+    const best = sups.filter(x => x.unitCost > 0).sort((a, b) => a.unitCost - b.unitCost)[0];
+    const dL = s.requiredDate ? relDays(s.requiredDate) : null;
+    const dueTag = dL === null ? '' : dL < 0 ? `<span class="due over">${-dL}d late</span>` : dL <= 14 ? `<span class="due soon">${dL === 0 ? 'today' : dL + 'd left'}</span>` : `<span class="due">${fmtDate(s.requiredDate)}</span>`;
+    const stc = SEARCH_STATUS_COLOR[s.status] || 'var(--txt-faint)';
+    return `<div class="supcard" data-sup="${s.id}"><div class="sup-head"><div class="sup-name">${esc(s.name)}</div><span class="badge" style="background:transparent;border:1px solid ${stc};color:${stc};font-size:10px">${SEARCH_STATUSES[s.status] || ''}</span></div><div class="sup-meta">${s.product ? `<div class="sup-mrow"><span class="sup-mlbl">Product</span><span class="tag">${esc(s.product)}</span></div>` : ''}${s.requiredDate ? `<div class="sup-mrow"><span class="sup-mlbl">Need By</span>${dueTag}</div>` : ''}</div><div class="sup-stats"><div class="sup-stat"><b>${sups.length}</b><span>Suppliers</span></div><div class="sup-stat"><b>${quotes}</b><span>Quotations</span></div>${best ? `<div class="sup-stat"><b>$${best.unitCost}</b><span>Best Price</span></div>` : ''}</div></div>`;
+  }).join('');
+}
+function openSupplierModal(search) {
+  const isNew = !search;
+  const s = search ? JSON.parse(JSON.stringify(search)) : { id: uid(), name: '', product: '', requiredDate: '', description: '', status: 'searching', suppliers: [], createdAt: new Date().toISOString() };
+  let sups = JSON.parse(JSON.stringify(s.suppliers || []));
+  let activeTab = 'tracking';
+  function render() {
+    const quotes = sups.filter(x => ['quotation_received','sample_requested','sample_received','approved'].includes(x.status));
+    const wc = sups.filter(x => x.unitCost > 0).sort((a, b) => a.unitCost - b.unitCost);
+    const wl = sups.filter(x => x.leadTime > 0).sort((a, b) => a.leadTime - b.leadTime);
+    const wm = sups.filter(x => x.moq > 0).sort((a, b) => a.moq - b.moq);
+    const kpi = `<div class="sh-kpi">${[['Suppliers', sups.length], ['Quotations', quotes.length], ['Best Price', wc.length ? '$' + wc[0].unitCost : '—'], ['Shortest Lead Time', wl.length ? wl[0].leadTime + 'd' : '—'], ['Best MOQ', wm.length ? wm[0].moq : '—']].map(([l, v]) => `<div class="shk"><div class="shk-v">${v}</div><div class="shk-l">${l}</div></div>`).join('')}</div>`;
+    const tabs = `<div class="sh-tabs"><button class="sh-tab ${activeTab === 'tracking' ? 'on' : ''}" data-sht="tracking">📋 Tracking</button><button class="sh-tab ${activeTab === 'analysis' ? 'on' : ''}" data-sht="analysis">📊 Supplier Analysis</button></div>`;
+    const supRows = sups.map((sup, i) => {
+      const h = supHealth(sup, s.requiredDate);
+      const ds = sup.lastContact ? Math.floor((today() - startOfDay(new Date(sup.lastContact + 'T00:00:00'))) / DAY) : null;
+      let deliv = '';
+      if (sup.leadTime > 0 && s.requiredDate) { const dL = Math.round((startOfDay(parseDate(s.requiredDate)) - today()) / DAY), mg = dL - sup.leadTime; deliv = `<span style="font-family:var(--mono);font-size:10px;color:${mg >= 14 ? 'var(--green)' : mg >= 0 ? 'var(--amber)' : 'var(--red)'}"> (${mg >= 0 ? '+' : ''}${mg}d)</span>`; }
+      return `<tr><td><span title="${h.label}">${h.dot}</span> <b>${esc(sup.name) || '—'}</b></td><td class="sh-dim" style="font-size:12px">${esc(sup.email) || '—'}</td><td><span class="badge sh-st-${sup.status}">${SUP_STATUSES[sup.status] || '—'}</span></td><td class="sh-mono">${sup.unitCost > 0 ? '$' + sup.unitCost : '—'}</td><td class="sh-mono">${sup.moq > 0 ? sup.moq : '—'}</td><td class="sh-mono">${sup.leadTime > 0 ? sup.leadTime + 'd' + deliv : '—'}</td><td class="sh-dim sh-mono" style="font-size:11px">${sup.lastContact ? fmtDate(sup.lastContact) : '—'}</td><td>${ds !== null ? `<span class="sh-mono" style="color:${ds > 14 ? 'var(--red)' : ds > 7 ? 'var(--amber)' : 'var(--green)'}">${ds}d</span>` : '—'}</td><td><button class="btn sm ghost sh-esup" data-si="${i}" style="padding:3px 8px;font-size:11px">✎</button></td></tr>`;
+    }).join('');
+    const trackHtml = `<div class="row3" style="margin-bottom:12px"><div class="field"><label>Search Name</label><input id="sh-name" value="${esc(s.name)}" placeholder="e.g. Medical PVC Tube"></div><div class="field"><label>Related Product</label><select id="sh-prod">${selOpts(productOptions(), s.product)}</select></div><div class="field"><label>Status</label><select id="sh-status">${Object.entries(SEARCH_STATUSES).map(([k, v]) => `<option value="${k}" ${s.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div></div><div class="row2" style="margin-bottom:12px"><div class="field"><label>Required Date</label><input id="sh-date" type="date" value="${s.requiredDate || ''}"></div><div></div></div><div class="field" style="margin-bottom:16px"><label>Technical Description</label><textarea id="sh-desc" style="min-height:90px;font-size:13px" placeholder="Paste specs here: dimensions, material grade, compliance, certifications…">${esc(s.description)}</textarea></div><div class="subhead">🏭 Supplier Tracking</div><div style="overflow-x:auto;margin-top:10px"><table class="sh-tbl"><thead><tr><th>Supplier</th><th>Email</th><th>Status</th><th>Unit Cost</th><th>MOQ</th><th>Lead Time</th><th>Last Contact</th><th>Waiting</th><th></th></tr></thead><tbody>${supRows || '<tr><td colspan="9" style="color:var(--txt-faint);text-align:center;padding:18px">No suppliers yet — click Add below.</td></tr>'}</tbody></table></div><button class="btn sm primary" id="sh-asup" style="margin-top:12px">＋ Add Supplier</button>`;
+    const scorable = sups.filter(x => x.unitCost > 0 || x.leadTime > 0 || x.moq > 0);
+    const scored = scorable.map(x => ({ ...x, score: calcSupScore(x, scorable) })).sort((a, b) => b.score - a.score);
+    let analysisHtml;
+    if (scored.length < 2) {
+      analysisHtml = `<div style="color:var(--txt-faint);font-size:13.5px;padding:32px 0;text-align:center">Add at least 2 suppliers with cost or lead time data to generate the automatic analysis.</div>`;
+    } else {
+      const recs = [{ icon: '🏆', label: 'Recommended', val: scored[0].name, sub: `Score: ${scored[0].score}/100`, best: true }, wc.length ? { icon: '💰', label: 'Best Price', val: wc[0].name, sub: `$${wc[0].unitCost}/unit` } : null, wl.length ? { icon: '⚡', label: 'Fastest Lead Time', val: wl[0].name, sub: `${wl[0].leadTime} days` } : null, wm.length ? { icon: '📦', label: 'Best MOQ', val: wm[0].name, sub: `MOQ: ${wm[0].moq}` } : null].filter(Boolean);
+      analysisHtml = `<div class="sh-rec-grid">${recs.map(r => `<div class="sh-rec${r.best ? ' sh-rec-best' : ''}"><div style="font-size:22px;margin-bottom:6px">${r.icon}</div><div class="sh-rl">${r.label}</div><div class="sh-rv">${esc(r.val)}</div><div class="sh-rs">${r.sub}</div></div>`).join('')}</div><div class="subhead" style="margin-top:18px">Score Comparison</div><div style="overflow-x:auto;margin-top:10px"><table class="sh-tbl"><thead><tr><th>#</th><th>Supplier</th><th>Unit Cost</th><th>Lead Time</th><th>MOQ</th><th>Status</th><th style="min-width:140px">Score</th></tr></thead><tbody>${scored.map((sup, i) => { const col = sup.score >= 70 ? 'var(--green)' : sup.score >= 40 ? 'var(--amber)' : 'var(--red)'; return `<tr><td class="sh-mono sh-dim" style="font-size:11px">${i + 1}</td><td style="font-weight:600">${esc(sup.name)}</td><td class="sh-mono">${sup.unitCost > 0 ? '$' + sup.unitCost : '—'}</td><td class="sh-mono">${sup.leadTime > 0 ? sup.leadTime + 'd' : '—'}</td><td class="sh-mono">${sup.moq > 0 ? sup.moq : '—'}</td><td><span class="badge sh-st-${sup.status}">${SUP_STATUSES[sup.status] || '—'}</span></td><td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;background:var(--line-soft);border-radius:3px;overflow:hidden"><div style="height:100%;width:${sup.score}%;background:${col};border-radius:3px"></div></div><span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${col};min-width:30px">${sup.score}</span></div></td></tr>`; }).join('')}</tbody></table></div><div class="sh-summary"><div class="sh-sum-head">📋 Executive Summary</div><div class="sh-sum-body">${generateAnalysisText({ ...s, suppliers: sups })}</div></div>`;
+    }
+    modalHost.innerHTML = `<div class="scrim" id="scrim"><div class="modal sh-modal" onclick="event.stopPropagation()"><div class="mhead"><h3>${isNew ? '＋ New Sourcing Search' : '🔍 ' + esc(s.name)}</h3><button class="xclose" id="mClose">✕</button></div>${kpi}${tabs}<div class="mbody sh-mbody">${activeTab === 'tracking' ? trackHtml : analysisHtml}</div><div class="mfoot">${!isNew ? `<button class="btn danger sm" id="sh-del">Delete</button>` : '<span></span>'}<div style="display:flex;gap:10px"><button class="btn ghost" id="mCancel">Cancel</button><button class="btn primary" id="sh-save">${isNew ? 'Create' : 'Save'}</button></div></div></div></div>`;
+    bindModal();
+  }
+  function collectForm() { const g = id => { const el = document.getElementById(id); return el ? el.value : null; }; if (g('sh-name') !== null) { s.name = g('sh-name'); s.product = g('sh-prod'); s.status = g('sh-status'); s.requiredDate = g('sh-date'); s.description = g('sh-desc'); } }
+  function bindModal() {
+    const close = () => { modalHost.innerHTML = ''; renderSupplierHub(); };
+    document.getElementById('scrim').onclick = close; document.getElementById('mClose').onclick = close; document.getElementById('mCancel').onclick = close;
+    document.querySelectorAll('[data-sht]').forEach(btn => btn.onclick = () => { collectForm(); activeTab = btn.dataset.sht; render(); });
+    const asup = document.getElementById('sh-asup'); if (asup) asup.onclick = () => { collectForm(); openSupEditor(-1); };
+    document.querySelectorAll('.sh-esup').forEach(btn => btn.onclick = e => { e.stopPropagation(); collectForm(); openSupEditor(+btn.dataset.si); });
+    document.getElementById('sh-save').onclick = async () => {
+      collectForm(); if (!s.name.trim()) { toast('Add a search name first'); return; }
+      s.suppliers = sups;
+      if (isNew) supplierSearches.unshift(s); else { const idx = supplierSearches.findIndex(x => x.id === s.id); if (idx >= 0) supplierSearches[idx] = s; }
+      await saveSupplierSearches(); close(); toast(isNew ? 'Search created ✓' : 'Saved ✓');
+    };
+    if (!isNew) { const del = document.getElementById('sh-del'); if (del) del.onclick = async () => { if (await customConfirm(`Delete <b>${esc(s.name)}</b>?`, { yes: 'Delete', danger: true })) { supplierSearches = supplierSearches.filter(x => x.id !== s.id); await saveSupplierSearches(); close(); toast('Deleted'); } }; }
+  }
+  function openSupEditor(idx) {
+    const isNewSup = idx < 0;
+    const sup = isNewSup ? { id: uid(), name: '', email: '', status: 'not_contacted', unitCost: 0, moq: 0, leadTime: 0, lastContact: '', notes: '' } : { ...sups[idx] };
+    const w = document.createElement('div'); w.className = 'cscrim';
+    w.innerHTML = `<div class="cbox" style="max-width:480px;width:95%"><div style="font-family:var(--display);font-weight:700;font-size:16px;margin-bottom:16px">${isNewSup ? '＋ Add Supplier' : '✎ ' + esc(sup.name)}</div><div class="row2" style="margin-bottom:10px"><div class="field"><label>Supplier Name</label><input id="se-nm" value="${esc(sup.name)}" placeholder="Company name"></div><div class="field"><label>Email</label><input id="se-em" type="email" value="${esc(sup.email)}" placeholder="contact@supplier.com"></div></div><div class="field" style="margin-bottom:10px"><label>Status</label><select id="se-st">${Object.entries(SUP_STATUSES).map(([k, v]) => `<option value="${k}" ${sup.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="row3" style="margin-bottom:10px"><div class="field"><label>Unit Cost ($)</label><input id="se-co" type="number" min="0" step="0.01" value="${sup.unitCost || ''}"></div><div class="field"><label>MOQ</label><input id="se-mq" type="number" min="0" value="${sup.moq || ''}"></div><div class="field"><label>Lead Time (days)</label><input id="se-lt" type="number" min="0" value="${sup.leadTime || ''}"></div></div><div class="field" style="margin-bottom:10px"><label>Last Contact</label><input id="se-lc" type="date" value="${sup.lastContact || ''}"></div><div class="field" style="margin-bottom:16px"><label>Notes</label><textarea id="se-no" style="min-height:60px">${esc(sup.notes || '')}</textarea></div><div class="cbtns">${!isNewSup ? `<button class="btn danger sm se-del">Remove</button>` : '<span></span>'}<div style="display:flex;gap:8px"><button class="btn ghost csm se-cx">Cancel</button><button class="btn primary csm se-ok">${isNewSup ? 'Add' : 'Save'}</button></div></div></div>`;
+    document.body.appendChild(w);
+    setTimeout(() => document.getElementById('se-nm')?.focus(), 50);
+    const g = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+    const save = () => { const nm = g('se-nm').trim(); if (!nm) { toast('Enter supplier name'); return; } const obj = { ...sup, name: nm, email: g('se-em').trim(), status: g('se-st'), unitCost: parseFloat(g('se-co')) || 0, moq: parseInt(g('se-mq')) || 0, leadTime: parseInt(g('se-lt')) || 0, lastContact: g('se-lc'), notes: g('se-no').trim() }; if (isNewSup) sups.push(obj); else sups[idx] = obj; w.remove(); render(); };
+    w.querySelector('.se-ok').onclick = save; w.querySelector('.se-cx').onclick = () => w.remove();
+    const del = w.querySelector('.se-del'); if (del) del.onclick = async () => { if (await customConfirm(`Remove <b>${esc(sup.name)}</b>?`, { yes: 'Remove', danger: true })) { sups.splice(idx, 1); w.remove(); render(); } };
+    document.getElementById('se-nm')?.addEventListener('keydown', e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') w.remove(); });
+  }
+  render();
+}
+
 // ── PRODUCTS ──────────────────────────────────────────────────────────────────
 function renderProducts() {
   const names = uniq([...(settings.products || []), ...tasks.map(t => t.product).filter(Boolean)]);
@@ -949,8 +1066,8 @@ function renderSettings() {
 }
 
 // ── EXPORT / IMPORT ───────────────────────────────────────────────────────────
-function doExport() { const blob = new Blob([JSON.stringify({ tasks, vocab, ideas, settings, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'polaris-backup-' + todayStr() + '.json'; a.click(); toast('Backup downloaded ⬇︎'); }
-function doImport(file) { const r = new FileReader(); r.onload = async () => { try { const d = JSON.parse(r.result); if (!await customConfirm('Import will replace all current data.\nThis cannot be undone.', { yes: 'Import', no: 'Cancel', danger: true })) return; tasks = d.tasks || []; vocab = d.vocab || []; ideas = d.ideas || []; if (d.settings) settings = { ...DEFAULTS, ...d.settings }; await sset('tasks', tasks); await sset('vocab', vocab); await sset('ideas', ideas); await sset('settings', settings); refreshAll(); toast('Backup restored ✓'); } catch(e) { toast('Invalid backup file'); } }; r.readAsText(file); }
+function doExport() { const blob = new Blob([JSON.stringify({ tasks, vocab, ideas, settings, supplierSearches, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'polaris-backup-' + todayStr() + '.json'; a.click(); toast('Backup downloaded ⬇︎'); }
+function doImport(file) { const r = new FileReader(); r.onload = async () => { try { const d = JSON.parse(r.result); if (!await customConfirm('Import will replace all current data.\nThis cannot be undone.', { yes: 'Import', no: 'Cancel', danger: true })) return; tasks = d.tasks || []; vocab = d.vocab || []; ideas = d.ideas || []; supplierSearches = d.supplierSearches || []; if (d.settings) settings = { ...DEFAULTS, ...d.settings }; await sset('tasks', tasks); await sset('vocab', vocab); await sset('ideas', ideas); await sset('supplierSearches', supplierSearches); await sset('settings', settings); refreshAll(); toast('Backup restored ✓'); } catch(e) { toast('Invalid backup file'); } }; r.readAsText(file); }
 
 // ── INLINE PICKERS ────────────────────────────────────────────────────────────
 function showStatusPicker(id, anchorEl) {
@@ -993,12 +1110,12 @@ function showProgressPicker(id, anchorEl) {
 // ── VIEWS / EVENTS ────────────────────────────────────────────────────────────
 function show(view) {
   current = view;
-  ['today', 'board', 'calendar', 'table', 'dashboard', 'products', 'vocab', 'ideas', 'settings'].forEach(v => document.getElementById('view-' + v).classList.toggle('hide', v !== view));
+  ['today', 'board', 'calendar', 'table', 'dashboard', 'supplier', 'products', 'vocab', 'ideas', 'settings'].forEach(v => document.getElementById('view-' + v).classList.toggle('hide', v !== view));
   document.querySelectorAll('.nav-item').forEach(t => t.classList.toggle('on', t.dataset.tab === view));
   document.getElementById('pageTitle').textContent = TITLES[view];
   closeDrawer(); updateTabCounts(); renderCurrent();
 }
-function renderCurrent() { ({ today: renderToday, board: renderBoard, calendar: renderCalendar, dashboard: renderDashboard, products: renderProducts, vocab: renderVocab, ideas: renderIdeas, settings: renderSettings, table: () => { renderFilters(); renderTable(); } }[current])(); }
+function renderCurrent() { ({ today: renderToday, board: renderBoard, calendar: renderCalendar, dashboard: renderDashboard, supplier: renderSupplierHub, products: renderProducts, vocab: renderVocab, ideas: renderIdeas, settings: renderSettings, table: () => { renderFilters(); renderTable(); } }[current])(); }
 function updateTabCounts() {
   document.getElementById('c-today').textContent = tasks.filter(t => t.status !== 'done' && ((relDays(t.deadline) !== null && relDays(t.deadline) <= 0) || replyDue(t))).length;
   document.getElementById('c-board').textContent = tasks.filter(t => t.status !== 'done').length;
@@ -1025,12 +1142,14 @@ document.addEventListener('click', e => {
   const istat = e.target.closest('[data-istat]'); if (istat) { showStatusPicker(istat.dataset.istat, istat); return; }
   const iprog = e.target.closest('[data-iprog]'); if (iprog) { showProgressPicker(iprog.dataset.iprog, iprog); return; }
   const prd = e.target.closest('[data-prod]'); if (prd) { openProductDetail(prd.dataset.prod); return; }
+  const sc = e.target.closest('.supcard[data-sup]'); if (sc) { openSupplierModal(supplierSearches.find(x => x.id === sc.dataset.sup)); return; }
   const op = e.target.closest('[data-open]'); if (op) { openModal(getTask(op.dataset.open)); return; }
   const cy = e.target.closest('[data-cycle]'); if (cy) { const v = vocab.find(x => x.id === cy.dataset.cycle); const seq = ['new', 'learning', 'known']; v.status = seq[(seq.indexOf(v.status) + 1) % 3]; saveVocab(); renderVocab(); updateTabCounts(); return; }
   const ka = e.target.closest('[data-kadd]'); if (ka) { openModal({ id: null, title: '', description: '', requester: '', product: '', type: '', sector: '', source: '', project: '', deadline: '', priority: 'medium', progress: 0, status: ka.dataset.kadd, blockers: '', notes: '', hours: 0, contacts: [] }); return; }
   const idel = e.target.closest('[data-idel]'); if (idel) { ideas = ideas.filter(i => i.id !== idel.dataset.idel); saveIdeas(); return; }
 });
 
+document.getElementById('supNew').onclick = () => openSupplierModal(null);
 document.getElementById('boardNew').onclick = () => openModal(null);
 document.getElementById('fab').onclick = () => openModal(null);
 document.getElementById('mineBtn').onclick = mineVocab;
@@ -1063,7 +1182,7 @@ document.getElementById('drawerScrim').onclick = closeDrawer;
     if (!Array.isArray(t.contacts)) t.contacts = [];
   });
   if (tasks.some(t => !t.num)) { const ord = [...tasks].sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0)); ord.forEach((t, i) => { if (!t.num) t.num = i + 1; }); await sset('tasks', tasks); }
-  vocab = await sget('vocab', []); ideas = await sget('ideas', []);
+  vocab = await sget('vocab', []); ideas = await sget('ideas', []); supplierSearches = await sget('supplierSearches', []);
   if (settings.collapsed) document.getElementById('sidebar').classList.add('collapsed');
   const n = new Date(); calY = n.getFullYear(); calM = n.getMonth();
   if (!getToken()) setSyncStatus('idle', 'Token not set — open Settings to enable sync');
