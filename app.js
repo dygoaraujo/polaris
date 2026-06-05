@@ -773,18 +773,26 @@ function supHealth(sup, requiredDate) {
   if (ds > 7) return { dot: '🟡', label: 'Follow-up needed' };
   return { dot: '🟢', label: 'On track' };
 }
-function calcSupScore(sup, allSups) {
+function calcSupScore(sup, allSups, monthlyDemand = 0) {
   const wc = allSups.filter(s => s.unitCost > 0), wl = allSups.filter(s => s.leadTime > 0), wm = allSups.filter(s => s.moq > 0);
   const ps = sup.unitCost > 0 && wc.length ? Math.min(...wc.map(s => s.unitCost)) / sup.unitCost * 100 : 0;
   const ls = sup.leadTime > 0 && wl.length ? Math.min(...wl.map(s => s.leadTime)) / sup.leadTime * 100 : 0;
-  const ms = sup.moq > 0 && wm.length ? Math.min(...wm.map(s => s.moq)) / sup.moq * 100 : 0;
+  let cs = 0;
+  if (monthlyDemand > 0 && sup.moq > 0 && wm.length) {
+    // lower coverage = better score
+    const minCov = Math.min(...wm.map(s => s.moq / monthlyDemand));
+    cs = minCov / (sup.moq / monthlyDemand) * 100;
+  } else if (sup.moq > 0 && wm.length) {
+    cs = Math.min(...wm.map(s => s.moq)) / sup.moq * 100;
+  }
   const ss = ({ approved: 100, sample_received: 80, quotation_received: 60, sample_requested: 40, awaiting_reply: 20, email_sent: 10, not_contacted: 0, rejected: 0 })[sup.status] || 0;
-  return Math.round(ps * 0.35 + ls * 0.35 + ms * 0.20 + ss * 0.10);
+  return Math.round(ps * 0.35 + ls * 0.35 + cs * 0.20 + ss * 0.10);
 }
 function generateAnalysisText(search) {
   const sups = (search.suppliers || []).filter(s => s.unitCost > 0 || s.leadTime > 0);
   if (sups.length < 2) return 'Add at least 2 suppliers with cost or lead time data to generate the automatic analysis.';
-  const scored = sups.map(s => ({ ...s, score: calcSupScore(s, sups) })).sort((a, b) => b.score - a.score);
+  const md = search.monthlyDemand || 0;
+  const scored = sups.map(s => ({ ...s, score: calcSupScore(s, sups, md) })).sort((a, b) => b.score - a.score);
   const cheapest = [...sups].filter(s => s.unitCost > 0).sort((a, b) => a.unitCost - b.unitCost)[0];
   const fastest = [...sups].filter(s => s.leadTime > 0).sort((a, b) => a.leadTime - b.leadTime)[0];
   const best = scored[0];
@@ -792,6 +800,11 @@ function generateAnalysisText(search) {
   if (best) parts.push(`<b>${esc(best.name)}</b> presents the best overall balance with a composite score of ${best.score}/100.`);
   if (cheapest && best && cheapest.name !== best.name) { let p = `Although <b>${esc(cheapest.name)}</b> offers the lowest unit cost ($${cheapest.unitCost})`; p += cheapest.leadTime > 0 && fastest && cheapest.leadTime > fastest.leadTime ? `, its lead time of ${cheapest.leadTime} days is longer than ${esc(fastest.name)}'s ${fastest.leadTime} days.` : '.'; parts.push(p); }
   if (fastest && fastest.name !== best?.name && fastest.name !== cheapest?.name) parts.push(`<b>${esc(fastest.name)}</b> has the shortest lead time at ${fastest.leadTime} days.`);
+  if (md > 0) {
+    sups.filter(s => s.moq > 0).forEach(s => { const cov = s.moq / md; if (cov > 24) parts.push(`⚠️ <b>${esc(s.name)}</b>'s MOQ represents approximately ${cov.toFixed(0)} months of coverage — considered excessive and may result in capital tied up in stock or obsolescence risk.`); else if (cov > 12) parts.push(`<b>${esc(s.name)}</b>'s MOQ represents ${cov.toFixed(0)} months of coverage — above ideal, but manageable.`); });
+    const bestCov = sups.filter(s => s.moq > 0).sort((a, b) => (a.moq / md) - (b.moq / md))[0];
+    if (bestCov && bestCov.moq / md <= 12) parts.push(`<b>${esc(bestCov.name)}</b> has the most favorable MOQ coverage at ${(bestCov.moq / md).toFixed(1)} months — reducing capital exposure.`);
+  }
   if (search.requiredDate) {
     const dL = Math.round((startOfDay(parseDate(search.requiredDate)) - today()) / DAY);
     const atRisk = sups.filter(s => s.leadTime > 0 && s.leadTime > dL);
@@ -815,7 +828,7 @@ function renderSupplierHub() {
 }
 function openSupplierModal(search) {
   const isNew = !search;
-  const s = search ? JSON.parse(JSON.stringify(search)) : { id: uid(), name: '', product: '', requiredDate: '', description: '', status: 'searching', suppliers: [], createdAt: new Date().toISOString() };
+  const s = search ? JSON.parse(JSON.stringify(search)) : { id: uid(), name: '', product: '', requiredDate: '', monthlyDemand: 0, description: '', status: 'searching', suppliers: [], createdAt: new Date().toISOString() };
   let sups = JSON.parse(JSON.stringify(s.suppliers || []));
   let activeTab = 'tracking';
   function render() {
@@ -830,11 +843,13 @@ function openSupplierModal(search) {
       const ds = sup.lastContact ? Math.floor((today() - startOfDay(new Date(sup.lastContact + 'T00:00:00'))) / DAY) : null;
       let deliv = '';
       if (sup.leadTime > 0 && s.requiredDate) { const dL = Math.round((startOfDay(parseDate(s.requiredDate)) - today()) / DAY), mg = dL - sup.leadTime; deliv = `<span style="font-family:var(--mono);font-size:10px;color:${mg >= 14 ? 'var(--green)' : mg >= 0 ? 'var(--amber)' : 'var(--red)'}"> (${mg >= 0 ? '+' : ''}${mg}d)</span>`; }
-      return `<tr><td><span title="${h.label}">${h.dot}</span> <b>${esc(sup.name) || '—'}</b></td><td class="sh-dim" style="font-size:12px">${esc(sup.email) || '—'}</td><td><span class="badge sh-st-${sup.status}">${SUP_STATUSES[sup.status] || '—'}</span></td><td class="sh-mono">${sup.unitCost > 0 ? '$' + sup.unitCost : '—'}</td><td class="sh-mono">${sup.moq > 0 ? sup.moq : '—'}</td><td class="sh-mono">${sup.leadTime > 0 ? sup.leadTime + 'd' + deliv : '—'}</td><td class="sh-dim sh-mono" style="font-size:11px">${sup.lastContact ? fmtDate(sup.lastContact) : '—'}</td><td>${ds !== null ? `<span class="sh-mono" style="color:${ds > 14 ? 'var(--red)' : ds > 7 ? 'var(--amber)' : 'var(--green)'}">${ds}d</span>` : '—'}</td><td><button class="btn sm ghost sh-esup" data-si="${i}" style="padding:3px 8px;font-size:11px">✎</button></td></tr>`;
+      let covCell = '—';
+      if (s.monthlyDemand > 0 && sup.moq > 0) { const cov = sup.moq / s.monthlyDemand; const covColor = cov <= 12 ? 'var(--green)' : cov <= 24 ? 'var(--amber)' : 'var(--red)'; covCell = `<span class="sh-mono" style="color:${covColor}" title="${cov > 24 ? 'Excessive — capital risk' : cov > 12 ? 'Elevated' : 'Healthy'}">${cov.toFixed(1)}mo</span>`; }
+      return `<tr><td><span title="${h.label}">${h.dot}</span> <b>${esc(sup.name) || '—'}</b></td><td class="sh-dim" style="font-size:12px">${esc(sup.email) || '—'}</td><td><span class="badge sh-st-${sup.status}">${SUP_STATUSES[sup.status] || '—'}</span></td><td class="sh-mono">${sup.unitCost > 0 ? '$' + sup.unitCost : '—'}</td><td class="sh-mono">${sup.moq > 0 ? sup.moq : '—'}</td><td>${covCell}</td><td class="sh-mono">${sup.leadTime > 0 ? sup.leadTime + 'd' + deliv : '—'}</td><td class="sh-dim sh-mono" style="font-size:11px">${sup.lastContact ? fmtDate(sup.lastContact) : '—'}</td><td>${ds !== null ? `<span class="sh-mono" style="color:${ds > 14 ? 'var(--red)' : ds > 7 ? 'var(--amber)' : 'var(--green)'}">${ds}d</span>` : '—'}</td><td><button class="btn sm ghost sh-esup" data-si="${i}" style="padding:3px 8px;font-size:11px">✎</button></td></tr>`;
     }).join('');
-    const trackHtml = `<div class="row3" style="margin-bottom:12px"><div class="field"><label>Search Name</label><input id="sh-name" value="${esc(s.name)}" placeholder="e.g. Medical PVC Tube"></div><div class="field"><label>Related Product</label><select id="sh-prod">${selOpts(productOptions(), s.product)}</select></div><div class="field"><label>Status</label><select id="sh-status">${Object.entries(SEARCH_STATUSES).map(([k, v]) => `<option value="${k}" ${s.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div></div><div class="row2" style="margin-bottom:12px"><div class="field"><label>Required Date</label><input id="sh-date" type="date" value="${s.requiredDate || ''}"></div><div></div></div><div class="field" style="margin-bottom:16px"><label>Technical Description</label><textarea id="sh-desc" style="min-height:90px;font-size:13px" placeholder="Paste specs here: dimensions, material grade, compliance, certifications…">${esc(s.description)}</textarea></div><div class="subhead">🏭 Supplier Tracking</div><div style="overflow-x:auto;margin-top:10px"><table class="sh-tbl"><thead><tr><th>Supplier</th><th>Email</th><th>Status</th><th>Unit Cost</th><th>MOQ</th><th>Lead Time</th><th>Last Contact</th><th>Waiting</th><th></th></tr></thead><tbody>${supRows || '<tr><td colspan="9" style="color:var(--txt-faint);text-align:center;padding:18px">No suppliers yet — click Add below.</td></tr>'}</tbody></table></div><button class="btn sm primary" id="sh-asup" style="margin-top:12px">＋ Add Supplier</button>`;
+    const trackHtml = `<div class="row3" style="margin-bottom:12px"><div class="field"><label>Search Name</label><input id="sh-name" value="${esc(s.name)}" placeholder="e.g. Medical PVC Tube"></div><div class="field"><label>Related Product</label><select id="sh-prod">${selOpts(productOptions(), s.product)}</select></div><div class="field"><label>Status</label><select id="sh-status">${Object.entries(SEARCH_STATUSES).map(([k, v]) => `<option value="${k}" ${s.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div></div><div class="row2" style="margin-bottom:12px"><div class="field"><label>Required Date</label><input id="sh-date" type="date" value="${s.requiredDate || ''}"></div><div class="field"><label>Monthly Demand <span style="font-weight:400;color:var(--txt-faint)">(units/month)</span></label><input id="sh-demand" type="number" min="0" step="1" value="${s.monthlyDemand || ''}" placeholder="e.g. 500"></div></div><div class="field" style="margin-bottom:16px"><label>Technical Description</label><textarea id="sh-desc" style="min-height:90px;font-size:13px" placeholder="Paste specs here: dimensions, material grade, compliance, certifications…">${esc(s.description)}</textarea></div><div class="subhead">🏭 Supplier Tracking</div><div style="overflow-x:auto;margin-top:10px"><table class="sh-tbl"><thead><tr><th>Supplier</th><th>Email</th><th>Status</th><th>Unit Cost</th><th>MOQ</th><th>MOQ Coverage</th><th>Lead Time</th><th>Last Contact</th><th>Waiting</th><th></th></tr></thead><tbody>${supRows || '<tr><td colspan="10" style="color:var(--txt-faint);text-align:center;padding:18px">No suppliers yet — click Add below.</td></tr>'}</tbody></table></div><button class="btn sm primary" id="sh-asup" style="margin-top:12px">＋ Add Supplier</button>`;
     const scorable = sups.filter(x => x.unitCost > 0 || x.leadTime > 0 || x.moq > 0);
-    const scored = scorable.map(x => ({ ...x, score: calcSupScore(x, scorable) })).sort((a, b) => b.score - a.score);
+    const scored = scorable.map(x => ({ ...x, score: calcSupScore(x, scorable, s.monthlyDemand || 0) })).sort((a, b) => b.score - a.score);
     let analysisHtml;
     if (scored.length < 2) {
       analysisHtml = `<div style="color:var(--txt-faint);font-size:13.5px;padding:32px 0;text-align:center">Add at least 2 suppliers with cost or lead time data to generate the automatic analysis.</div>`;
@@ -845,7 +860,7 @@ function openSupplierModal(search) {
     modalHost.innerHTML = `<div class="scrim" id="scrim"><div class="modal sh-modal" onclick="event.stopPropagation()"><div class="mhead"><h3>${isNew ? '＋ New Sourcing Search' : '🔍 ' + esc(s.name)}</h3><button class="xclose" id="mClose">✕</button></div>${kpi}${tabs}<div class="mbody sh-mbody">${activeTab === 'tracking' ? trackHtml : analysisHtml}</div><div class="mfoot">${!isNew ? `<button class="btn danger sm" id="sh-del">Delete</button>` : '<span></span>'}<div style="display:flex;gap:10px"><button class="btn ghost" id="mCancel">Cancel</button><button class="btn primary" id="sh-save">${isNew ? 'Create' : 'Save'}</button></div></div></div></div>`;
     bindModal();
   }
-  function collectForm() { const g = id => { const el = document.getElementById(id); return el ? el.value : null; }; if (g('sh-name') !== null) { s.name = g('sh-name'); s.product = g('sh-prod'); s.status = g('sh-status'); s.requiredDate = g('sh-date'); s.description = g('sh-desc'); } }
+  function collectForm() { const g = id => { const el = document.getElementById(id); return el ? el.value : null; }; if (g('sh-name') !== null) { s.name = g('sh-name'); s.product = g('sh-prod'); s.status = g('sh-status'); s.requiredDate = g('sh-date'); s.monthlyDemand = parseFloat(g('sh-demand')) || 0; s.description = g('sh-desc'); } }
   function bindModal() {
     const close = () => { modalHost.innerHTML = ''; renderSupplierHub(); };
     document.getElementById('scrim').onclick = close; document.getElementById('mClose').onclick = close; document.getElementById('mCancel').onclick = close;
