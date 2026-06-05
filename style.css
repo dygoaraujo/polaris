@@ -91,6 +91,8 @@ button{font-family:inherit;cursor:pointer}input,textarea,select{font-family:inhe
 .focus-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-soft);cursor:pointer}.focus-item:last-child{border-bottom:0}
 .focus-item .num{font-family:var(--display);font-weight:800;color:var(--accent);width:20px}.focus-item .ft{flex:1;font-weight:600}.focus-item.done .ft{text-decoration:line-through;color:var(--txt-dim)}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
+.today-mid-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;align-items:start}
+.today-stats{grid-template-columns:1fr 1fr!important;margin-bottom:0!important}
 .stat{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r);padding:14px 16px;position:relative;overflow:hidden}
 .stat::after{content:'';position:absolute;inset:0 0 auto 0;height:3px;background:var(--accent,var(--amber));opacity:.75}
 .stat .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-faint)}
@@ -207,6 +209,17 @@ tr.addrow input,tr.addrow select{color-scheme:dark}
 .fc-back{background:linear-gradient(160deg,#15233a,#101a2e);transform:rotateY(180deg)}.fc-back .tr{font-family:var(--display);font-weight:800;font-size:28px;color:var(--amber)}
 .fc-back .ex{color:var(--txt-dim);margin-top:14px;font-style:italic;font-size:14px}
 .fc-controls{display:flex;gap:10px}.fc-count{font-family:var(--mono);font-size:12px;color:var(--txt-dim)}
+
+/* WEEK SUMMARY */
+.week-summary-panel{background:linear-gradient(150deg,rgba(57,217,138,.07),var(--panel));border:1px solid rgba(57,217,138,.2)}
+.ws-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-family:var(--display);font-weight:700;font-size:15px}
+.ws-count{font-family:var(--mono);font-size:11px;background:var(--green-soft);color:var(--green);padding:2px 10px;border-radius:20px}
+.ws-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.ws-tbl th{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--txt-faint);padding:6px 10px;border-bottom:1px solid var(--line-soft);text-align:left}
+.ws-tbl td{padding:8px 10px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+.ws-tbl tr:last-child td{border-bottom:0}
+.ws-tbl tr:hover td{background:var(--panel-2)}
+.ws-title{font-weight:600;color:var(--txt)}
 
 /* METRICS */
 .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:18px}
