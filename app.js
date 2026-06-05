@@ -63,7 +63,7 @@ function scheduleGistSave() { clearTimeout(gistTimer); gistTimer = setTimeout(gi
 
 // ── State ────────────────────────────────────────────────────────────────────
 let tasks = [], vocab = [], ideas = [], settings = {};
-let current = 'today', filter = 'all', boardFilter = 'all', metricPeriod = 'total', dashPeriod = 'month';
+let current = 'today', filter = 'all', boardFilter = 'all', dashPeriod = 'month';
 let search = '', sortCol = 'createdAt', sortDir = -1, calY, calM, calSel = null;
 let addRowOpen = false;
 
@@ -71,7 +71,7 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 const PRIOS = { urgent: 'Urgent', high: 'High', medium: 'Medium', low: 'Low' };
 const STATUSES = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' };
 const STAT_COLOR = { todo: 'var(--txt-faint)', in_progress: 'var(--blue)', blocked: 'var(--red)', done: 'var(--green)' };
-const TITLES = { today: 'Today', board: 'Board', calendar: 'Calendar', table: 'All Activities', dashboard: 'Dashboard', metrics: 'Metrics', products: 'Products', vocab: 'Vocabulary', ideas: 'Backlog & Ideas', settings: 'Settings' };
+const TITLES = { today: 'Today', board: 'Board', calendar: 'Calendar', table: 'All Activities', dashboard: 'Dashboard', products: 'Products', vocab: 'Vocabulary', ideas: 'Backlog & Ideas', settings: 'Settings' };
 const DEFAULTS = { name: 'Rodrigo', types: ['Project document', 'Mechanical test', 'System registration', 'Research', 'Supplier dealing', 'Meeting', 'Production support'], sectors: ['Engineering', 'Production', 'Maintenance', 'Planning', 'Quality', 'Personal'], products: ['P-204 Pump', 'Conveyor C-12', 'Line 3'], sources: ['Project Sprint', 'Coordinator', 'Director', 'Production', 'Self'], projects: [], template: ['Product specification', 'Technical drawing', 'Test report', 'System registration'], calendar: {}, focusDate: '', focusIds: [], collapsed: false };
 
 const DAY = 86400000;
@@ -491,63 +491,7 @@ function renderFlash() {
   document.getElementById('fcKnow').onclick = () => next('known');
 }
 
-// ── METRICS ───────────────────────────────────────────────────────────────────
-function periodRange(p) { const t = today(); if (p === 'today') return [t, new Date(t.getTime() + DAY)]; if (p === 'week') return weekRange(0); if (p === 'month') return [new Date(t.getFullYear(), t.getMonth(), 1), new Date(t.getFullYear(), t.getMonth() + 1, 1)]; return null; }
-function metricIn(t) { if (metricPeriod === 'total') return true; const [a, b] = periodRange(metricPeriod); const inR = d => { if (!d) return false; const s = typeof d === 'string' && !d.includes('T') ? d + 'T00:00:00' : d; const x = startOfDay(new Date(s)); return x >= a && x < b; }; return inR(t.deadline) || inR(t.completedAt); }
 function groupCount(arr, field) { const m = {}; arr.forEach(t => { const v = (t[field] || '').trim() || '(none)'; m[v] = (m[v] || 0) + 1; }); return Object.entries(m).map(([label, n]) => ({ label, n })).sort((a, b) => b.n - a.n); }
-function renderMetricChips() { const P = [['today', 'Today'], ['week', 'This week'], ['month', 'This month'], ['total', 'Total']]; document.getElementById('metricChips').innerHTML = P.map(([k, l]) => `<button class="chip ${metricPeriod === k ? 'on' : ''}" data-mp="${k}">${l}</button>`).join(''); }
-function renderMetrics() {
-  renderMetricChips();
-  const mt = tasks.filter(metricIn);
-  const total = mt.length, done = mt.filter(t => t.status === 'done').length, rate = total ? Math.round(done / total * 100) : 0;
-  const hours = mt.reduce((s, t) => s + (+t.hours || 0), 0);
-  const now = new Date();
-  const curAbsM = now.getFullYear() * 12 + now.getMonth();
-  const toKey = a => { const y = Math.floor(a / 12), m = a % 12; return y + '-' + String(m + 1).padStart(2, '0'); };
-  const toLbl = (key, isCur, isNext) => { const [y, m] = key.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short' }) + (isCur ? ' ●' : isNext ? ' →' : ''); };
-  // Collect past months (up to 4) that actually have deadline or completion data
-  const pastKeys = [];
-  for (let i = 12; i >= 1 && pastKeys.length < 4; i--) {
-    const k = toKey(curAbsM - i);
-    if (tasks.some(t => (t.deadline || '').slice(0, 7) === k || (t.completedAt || '').slice(0, 7) === k)) pastKeys.push(k);
-  }
-  const curKey = toKey(curAbsM), nextKey = toKey(curAbsM + 1);
-  const months = [...pastKeys, curKey, nextKey];
-  const prog = months.map(m => tasks.filter(t => (t.deadline || '').slice(0, 7) === m).length);
-  const compl = months.map(m => tasks.filter(t => (t.completedAt || '').slice(0, 7) === m).length);
-  const maxv = Math.max(1, ...prog, ...compl);
-  const labels = months.map(m => toLbl(m, m === curKey, m === nextKey));
-  // Weekly summary
-  const [wkA, wkB] = weekRange(0);
-  const weekDone = tasks.filter(t => { if (!t.completedAt) return false; const x = startOfDay(new Date(t.completedAt)); return x >= wkA && x < wkB; }).sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
-  const weekSummaryHTML = weekDone.length
-    ? `<table class="ws-tbl"><thead><tr><th>Activity</th><th>Product</th><th>Priority</th><th>Completed</th></tr></thead><tbody>${weekDone.map(t => `<tr><td class="ws-title">${esc(t.title)}</td><td>${t.product ? `<span class="tag">${esc(t.product)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td><td><span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span></td><td style="color:var(--green);font-family:var(--mono);font-size:11.5px">${fmtDate(t.completedAt.slice(0,10))}</td></tr>`).join('')}</tbody></table>`
-    : `<div style="color:var(--txt-faint);font-size:13.5px;padding:8px 0">Nothing completed this week yet — keep pushing! 🚀</div>`;
-  const byPrio = Object.keys(PRIOS).map(k => ({ k, label: PRIOS[k], n: mt.filter(t => t.priority === k).length }));
-  const byStat = Object.keys(STATUSES).map(k => ({ k, label: STATUSES[k], n: mt.filter(t => t.status === k).length }));
-  const byType = groupCount(mt, 'type'), byProd = groupCount(mt, 'product').slice(0, 10), bySector = groupCount(mt, 'sector');
-  const prioColor = { urgent: 'var(--red)', high: 'var(--amber)', medium: 'var(--blue)', low: 'var(--txt-faint)' };
-  const palette = ['var(--accent)', '#3d80e8', '#5b9bff', '#7ab5ff', 'var(--teal)', '#2aa8d4', '#6abcdf', '#8dcef0', 'var(--violet)', '#a8c8ff'];
-  const distro = (arr, colorFn) => { const mx = Math.max(1, ...arr.map(a => a.n)); return `<div class="distro">${arr.map((a, i) => `<div class="row"><span class="lab" title="${esc(a.label)}">${esc(a.label)}</span><div class="track"><div class="fill" style="width:${a.n / mx * 100}%;background:${colorFn(a, i)}"></div></div><span class="num">${a.n}</span></div>`).join('')}</div>`; };
-  const pl = metricPeriod === 'total' ? 'all time' : ({ today: 'today', week: 'this week', month: 'this month' }[metricPeriod]);
-  document.getElementById('metricsBody').innerHTML = `
-  <div class="metric-grid">
-    <div class="mpanel"><h4>Completion rate · ${pl}</h4><div class="bigpct" style="color:var(--green)">${rate}%</div><div style="color:var(--txt-dim);margin-top:6px;font-size:13px">${done} of ${total} completed</div></div>
-    <div class="mpanel"><h4>Open workload</h4><div class="bigpct">${mt.filter(t => t.status !== 'done').length}</div><div style="color:var(--txt-dim);margin-top:6px;font-size:13px">${mt.filter(t => t.status === 'blocked').length} blocked · ${mt.filter(t => relDays(t.deadline) < 0 && t.status !== 'done').length} overdue</div></div>
-    <div class="mpanel"><h4>Hours logged · ${pl}</h4><div class="bigpct" style="color:var(--accent)">${hours}</div><div style="color:var(--txt-dim);margin-top:6px;font-size:13px">tracked across tasks</div></div>
-    <div class="mpanel"><h4>Awaiting your reply</h4><div class="bigpct" style="color:var(--red)">${tasks.filter(t => t.status !== 'done' && replyDue(t)).length}</div><div style="color:var(--txt-dim);margin-top:6px;font-size:13px">supplier balls in your court</div></div>
-  </div>
-  <div class="metric-grid" style="grid-template-columns:1.4fr 1fr">
-    <div class="mpanel"><h4>Deadlines vs. completed — by month</h4><div class="barchart">${labels.map((l, i) => `<div class="bc-col"><div class="bc-val-row"><span class="bc-v bc-vp">${prog[i] > 0 ? prog[i] : ''}</span><span class="bc-v bc-vc">${compl[i] > 0 ? compl[i] : ''}</span></div><div class="bc-bars"><div class="bc-bar prog" style="height:${prog[i] / maxv * 120}px" title="${prog[i]} planned"></div><div class="bc-bar done" style="height:${compl[i] / maxv * 120}px" title="${compl[i]} completed"></div></div><div class="bc-lbl">${l}</div></div>`).join('')}</div><div class="legend"><span><i style="background:var(--blue)"></i>Planned</span><span><i style="background:var(--green)"></i>Completed</span></div></div>
-    <div class="mpanel"><h4>By priority · ${pl}</h4>${distro(byPrio, a => prioColor[a.k])}<h4 style="margin-top:18px">By status</h4>${distro(byStat, a => STAT_COLOR[a.k])}</div>
-  </div>
-  <div class="metric-grid" style="grid-template-columns:1fr 1fr 1fr">
-    <div class="mpanel"><h4>By type · ${pl}</h4>${byType.length ? distro(byType, (a, i) => palette[i % palette.length]) : '<div style="color:var(--txt-faint);font-size:13px">No data.</div>'}</div>
-    <div class="mpanel"><h4>By product · ${pl}</h4>${byProd.length ? distro(byProd, (a, i) => palette[i % palette.length]) : '<div style="color:var(--txt-faint);font-size:13px">No data.</div>'}</div>
-    <div class="mpanel"><h4>By sector · ${pl}</h4>${bySector.length ? distro(bySector, (a, i) => palette[i % palette.length]) : '<div style="color:var(--txt-faint);font-size:13px">No data.</div>'}</div>
-  </div>
-  <div class="mpanel week-summary-panel"><div class="ws-head"><span>✅ Week summary</span><span class="ws-count">${weekDone.length} completed this week</span></div>${weekSummaryHTML}</div>`;
-}
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function dashRange(p) {
@@ -1049,12 +993,12 @@ function showProgressPicker(id, anchorEl) {
 // ── VIEWS / EVENTS ────────────────────────────────────────────────────────────
 function show(view) {
   current = view;
-  ['today', 'board', 'calendar', 'table', 'dashboard', 'metrics', 'products', 'vocab', 'ideas', 'settings'].forEach(v => document.getElementById('view-' + v).classList.toggle('hide', v !== view));
+  ['today', 'board', 'calendar', 'table', 'dashboard', 'products', 'vocab', 'ideas', 'settings'].forEach(v => document.getElementById('view-' + v).classList.toggle('hide', v !== view));
   document.querySelectorAll('.nav-item').forEach(t => t.classList.toggle('on', t.dataset.tab === view));
   document.getElementById('pageTitle').textContent = TITLES[view];
   closeDrawer(); updateTabCounts(); renderCurrent();
 }
-function renderCurrent() { ({ today: renderToday, board: renderBoard, calendar: renderCalendar, dashboard: renderDashboard, metrics: renderMetrics, products: renderProducts, vocab: renderVocab, ideas: renderIdeas, settings: renderSettings, table: () => { renderFilters(); renderTable(); } }[current])(); }
+function renderCurrent() { ({ today: renderToday, board: renderBoard, calendar: renderCalendar, dashboard: renderDashboard, products: renderProducts, vocab: renderVocab, ideas: renderIdeas, settings: renderSettings, table: () => { renderFilters(); renderTable(); } }[current])(); }
 function updateTabCounts() {
   document.getElementById('c-today').textContent = tasks.filter(t => t.status !== 'done' && ((relDays(t.deadline) !== null && relDays(t.deadline) <= 0) || replyDue(t))).length;
   document.getElementById('c-board').textContent = tasks.filter(t => t.status !== 'done').length;
@@ -1073,7 +1017,6 @@ document.addEventListener('click', e => {
   const f = e.target.closest('[data-f]'); if (f) { filter = f.dataset.f; renderFilters(); renderTable(); return; }
   const sq = e.target.closest('[data-sq]'); if (sq) { const [col, dir] = sq.dataset.sq.split(':'); sortCol = col; sortDir = parseInt(dir); renderFilters(); renderTable(); return; }
   const bf = e.target.closest('[data-bf]'); if (bf) { boardFilter = bf.dataset.bf; renderBoard(); return; }
-  const mp = e.target.closest('[data-mp]'); if (mp) { metricPeriod = mp.dataset.mp; renderMetrics(); return; }
   const dp = e.target.closest('[data-dp]'); if (dp) { dashPeriod = dp.dataset.dp; renderDashboard(); return; }
   const th = e.target.closest('th[data-sort]'); if (th) { const c = th.dataset.sort; if (sortCol === c) sortDir *= -1; else { sortCol = c; sortDir = 1; } renderTable(); return; }
   const star = e.target.closest('[data-star]'); if (star) { e.stopPropagation(); toggleFocus(star.dataset.star); return; }
