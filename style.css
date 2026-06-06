@@ -48,6 +48,22 @@ button{font-family:inherit;cursor:pointer}input,textarea,select{font-family:inhe
 .fab{position:fixed;right:24px;bottom:24px;width:56px;height:56px;border-radius:50%;border:0;background:linear-gradient(180deg,#5b9bff,var(--accent-2));color:#fff;font-size:28px;line-height:1;box-shadow:0 10px 28px -8px rgba(77,141,255,.7);z-index:30;display:grid;place-items:center}
 .fab:hover{filter:brightness(1.06);transform:translateY(-2px)}
 
+/* ── LOGIN ── */
+.login-wrap{position:fixed;inset:0;z-index:2000;background:var(--ink);display:flex;align-items:center;justify-content:center}
+.login-box{background:var(--panel);border:1px solid var(--line-soft);border-radius:20px;padding:44px 48px 40px;width:340px;display:flex;flex-direction:column;align-items:center}
+.login-logo{width:52px;height:52px;border-radius:14px;background:linear-gradient(150deg,#5b9bff,var(--accent-2));display:grid;place-items:center;margin-bottom:18px;box-shadow:0 8px 24px -8px rgba(77,141,255,.6)}
+.login-title{font-family:var(--display);font-weight:800;font-size:26px;letter-spacing:-.02em;margin-bottom:4px}
+.login-sub{font-size:13px;color:var(--txt-faint);margin-bottom:28px}
+.login-field{width:100%;margin-bottom:14px}
+.login-field label{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--txt-faint);margin-bottom:6px}
+.login-field input{width:100%;background:var(--panel-2);border:1px solid var(--line-soft);border-radius:10px;color:var(--txt);padding:10px 14px;font-size:14px;outline:none;transition:.15s}
+.login-field input:focus{border-color:var(--accent)}
+.login-err{color:var(--red);font-size:12.5px;margin-bottom:8px;min-height:18px;text-align:center;width:100%}
+.login-btn{width:100%;padding:11px;border-radius:10px;border:0;background:linear-gradient(180deg,#5b9bff,var(--accent-2));color:#fff;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;margin-top:4px;transition:.15s}
+.login-btn:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.login-wrap.fade-out{animation:loginFade .35s ease forwards}
+@keyframes loginFade{to{opacity:0;pointer-events:none}}
+
 /* SHARED */
 .btn{border:1px solid var(--line);background:var(--panel-2);color:var(--txt);padding:9px 15px;border-radius:10px;font-weight:600;font-size:14px;transition:.16s;display:inline-flex;align-items:center;gap:8px}
 .btn:hover{border-color:#33436a;transform:translateY(-1px)}
