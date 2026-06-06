@@ -1347,6 +1347,7 @@ document.getElementById('calToday').onclick = () => { const n = new Date(); calY
 document.getElementById('collapseBtn').onclick = () => { const sb = document.getElementById('sidebar'); sb.classList.toggle('collapsed'); settings.collapsed = sb.classList.contains('collapsed'); sset('settings', settings); };
 document.getElementById('hamb').onclick = () => { document.getElementById('sidebar').classList.add('open'); document.getElementById('drawerScrim').classList.add('show'); };
 document.getElementById('drawerScrim').onclick = closeDrawer;
+document.getElementById('logoutBtn').onclick = () => { localStorage.removeItem(AUTH_KEY); location.reload(); };
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 (async function init() {
