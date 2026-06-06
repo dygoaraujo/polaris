@@ -37,7 +37,8 @@ button{font-family:inherit;cursor:pointer}input,textarea,select{font-family:inhe
 .nav-item.on{background:linear-gradient(90deg,var(--accent-soft),transparent);color:var(--accent);box-shadow:inset 2px 0 0 var(--accent)}
 .nav-item.on .cnt{background:var(--accent-soft);color:var(--accent)}
 .sidebar.collapsed .nav-item{justify-content:center;padding:9px}
-.side-foot{margin-top:auto;display:flex;gap:6px;padding:10px 6px 4px;border-top:1px solid var(--line-soft);flex-wrap:wrap}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:4px;padding:10px 6px 4px;border-top:1px solid var(--line-soft)}
+.side-foot-row{display:flex;align-items:center;gap:6px;padding:0 2px}
 .side-foot .ftxt{font-size:11px;color:var(--txt-faint)}
 .main{flex:1;min-width:0;padding:22px 28px 110px;position:relative}
 .mobile-top{display:none;align-items:center;gap:12px;margin-bottom:16px}
