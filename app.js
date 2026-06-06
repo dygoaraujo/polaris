@@ -1,3 +1,56 @@
+// ── AUTH ──────────────────────────────────────────────────────────────────────
+// To change credentials: update AUTH_U / AUTH_P below and redeploy.
+const AUTH_U = 'rodrigo';
+const AUTH_P = 'polaris2025';
+const AUTH_KEY = 'polaris_auth';
+const AUTH_TOKEN = btoa(AUTH_U + ':' + AUTH_P);
+
+function authValid() {
+  try {
+    const s = localStorage.getItem(AUTH_KEY);
+    if (!s) return false;
+    const { token, exp } = JSON.parse(s);
+    if (Date.now() > exp) { localStorage.removeItem(AUTH_KEY); return false; }
+    return token === AUTH_TOKEN;
+  } catch { return false; }
+}
+function authSave() {
+  const midnight = new Date(); midnight.setHours(23, 59, 59, 999);
+  localStorage.setItem(AUTH_KEY, JSON.stringify({ token: AUTH_TOKEN, exp: midnight.getTime() }));
+}
+function showLogin(onSuccess) {
+  const wrap = document.createElement('div');
+  wrap.className = 'login-wrap';
+  wrap.innerHTML = `<div class="login-box">
+    <div class="login-logo"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0b1220" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></div>
+    <div class="login-title">Polaris</div>
+    <div class="login-sub">Engineering Operations Center</div>
+    <div class="login-field"><label>Username</label><input id="li-user" type="text" autocomplete="username" spellcheck="false"></div>
+    <div class="login-field"><label>Password</label><input id="li-pass" type="password" autocomplete="current-password"></div>
+    <div class="login-err" id="li-err"></div>
+    <button class="login-btn" id="li-btn">Sign in →</button>
+  </div>`;
+  document.body.appendChild(wrap);
+  const userEl = wrap.querySelector('#li-user');
+  const passEl = wrap.querySelector('#li-pass');
+  const errEl  = wrap.querySelector('#li-err');
+  userEl.focus();
+  const attempt = () => {
+    const u = userEl.value.trim().toLowerCase();
+    const p = passEl.value;
+    if (btoa(u + ':' + p) === AUTH_TOKEN) {
+      authSave();
+      wrap.classList.add('fade-out');
+      setTimeout(() => { wrap.remove(); onSuccess(); }, 360);
+    } else {
+      errEl.textContent = 'Incorrect username or password.';
+      passEl.value = ''; passEl.focus();
+    }
+  };
+  wrap.querySelector('#li-btn').onclick = attempt;
+  [userEl, passEl].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') attempt(); }));
+}
+
 // ── Storage (localStorage + Gist sync) ──────────────────────────────────────
 const mem = {};
 const LS_PREFIX = 'polaris_';
@@ -1296,7 +1349,18 @@ document.getElementById('hamb').onclick = () => { document.getElementById('sideb
 document.getElementById('drawerScrim').onclick = closeDrawer;
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-(async function init() {
+(function boot() {
+  if (authValid()) { init(); return; }
+  document.querySelector('.layout').style.display = 'none';
+  document.getElementById('fab').style.display = 'none';
+  showLogin(() => {
+    document.querySelector('.layout').style.display = '';
+    document.getElementById('fab').style.display = '';
+    init();
+  });
+})();
+
+async function init() {
   await gistLoad();
   settings = { ...DEFAULTS, ...(await sget('settings', {})) };
   tasks = await sget('tasks', null);
