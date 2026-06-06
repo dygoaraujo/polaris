@@ -27,12 +27,14 @@
     <div class="nav-group-label">Notes</div>
     <button class="nav-item" data-tab="ideas"><span class="ic">💡</span><span class="lbl">Ideas</span><span class="cnt" id="c-ideas">0</span></button>
     <div class="side-foot">
-      <button class="nav-item" data-tab="settings" style="flex:1"><span class="ic">⚙️</span><span class="lbl">Settings</span></button>
-      <button class="btn icon ghost sm" id="logoutBtn" title="Sign out">⏻</button>
-      <button class="btn icon ghost sm" id="exportBtn" title="Export backup">⬇︎</button>
-      <button class="btn icon ghost sm" id="importBtn" title="Import backup">⬆︎</button>
-      <input type="file" id="importFile" accept="application/json" class="hide">
-      <span id="syncStatus" style="font-size:13px;color:var(--txt-faint);padding:4px 2px;cursor:default" title="Sync status">●</span>
+      <button class="nav-item" data-tab="settings" style="width:100%"><span class="ic">⚙️</span><span class="lbl">Settings</span></button>
+      <div class="side-foot-row">
+        <button class="btn icon ghost sm" id="logoutBtn" title="Sign out">⏻</button>
+        <button class="btn icon ghost sm" id="exportBtn" title="Export backup">⬇︎</button>
+        <button class="btn icon ghost sm" id="importBtn" title="Import backup">⬆︎</button>
+        <input type="file" id="importFile" accept="application/json" class="hide">
+        <span id="syncStatus" style="font-size:13px;color:var(--txt-faint);padding:4px 2px;cursor:default" title="Sync status">●</span>
+      </div>
     </div>
   </aside>
   <div class="drawer-scrim" id="drawerScrim"></div>
