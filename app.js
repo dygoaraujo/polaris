@@ -1349,18 +1349,16 @@ document.getElementById('hamb').onclick = () => { document.getElementById('sideb
 document.getElementById('drawerScrim').onclick = closeDrawer;
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
-(function boot() {
-  if (authValid()) { init(); return; }
-  document.querySelector('.layout').style.display = 'none';
-  document.getElementById('fab').style.display = 'none';
-  showLogin(() => {
-    document.querySelector('.layout').style.display = '';
-    document.getElementById('fab').style.display = '';
-    init();
-  });
-})();
-
-async function init() {
+(async function init() {
+  if (!authValid()) {
+    document.querySelector('.layout').style.display = 'none';
+    document.getElementById('fab').style.display = 'none';
+    await new Promise(resolve => showLogin(() => {
+      document.querySelector('.layout').style.display = '';
+      document.getElementById('fab').style.display = '';
+      resolve();
+    }));
+  }
   await gistLoad();
   settings = { ...DEFAULTS, ...(await sget('settings', {})) };
   tasks = await sget('tasks', null);
