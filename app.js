@@ -345,8 +345,8 @@ function renderTable() {
   let arr = tasks.filter(t => matchesFilter(t, filter) && matchSearch(t));
   const po = { urgent: 0, high: 1, medium: 2, low: 3 }, so = { todo: 0, in_progress: 1, blocked: 2, done: 3 };
   arr.sort((a, b) => {
-    // Done tasks always go to the bottom (except when sorting by status explicitly)
-    if (sortCol !== 'status') {
+    // Done tasks always go to the bottom (except when sorting by status, createdAt or num)
+    if (sortCol !== 'status' && sortCol !== 'createdAt' && sortCol !== 'num') {
       const aDone = a.status === 'done', bDone = b.status === 'done';
       if (aDone !== bDone) return aDone ? 1 : -1;
     }
