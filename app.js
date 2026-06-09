@@ -116,7 +116,7 @@ function scheduleGistSave() { clearTimeout(gistTimer); gistTimer = setTimeout(gi
 
 // ── State ────────────────────────────────────────────────────────────────────
 let tasks = [], vocab = [], ideas = [], settings = {};
-let current = 'today', filter = 'all', boardFilter = 'all', dashPeriod = 'month';
+let current = 'today', filter = 'all', boardFilters = [], dashPeriod = 'month';
 let search = '', sortCol = 'createdAt', sortDir = -1, calY, calM, calSel = null;
 let addRowOpen = false;
 
@@ -171,8 +171,7 @@ function matchesFilter(t, f) {
   if (f === 'next_month') { const n = today(); const a = new Date(n.getFullYear(), n.getMonth() + 1, 1), b = new Date(n.getFullYear(), n.getMonth() + 2, 1); return d >= a && d < b; }
   return true;
 }
-function boardMatch(t, f) {
-  if (f === 'all') return true;
+function boardMatchOne(t, f) {
   if (f === 'reply') return replyDue(t);
   const d = parseDate(t.deadline), rd = relDays(t.deadline);
   if (rd === null) return false;
@@ -183,6 +182,11 @@ function boardMatch(t, f) {
   if (f === 'next') { const [a, b] = weekRange(1); return d >= a && d < b; }
   if (f === 'month') { const n = today(); const a = new Date(n.getFullYear(), n.getMonth(), 1), b = new Date(n.getFullYear(), n.getMonth() + 1, 1); return d >= a && d < b; }
   if (f === 'next_month') { const n = today(); const a = new Date(n.getFullYear(), n.getMonth() + 1, 1), b = new Date(n.getFullYear(), n.getMonth() + 2, 1); return d >= a && d < b; }
+  return false;
+}
+function boardMatch(t) {
+  if (!boardFilters.length) return true;
+  return boardFilters.some(f => boardMatchOne(t, f));
   return true;
 }
 const matchSearch = t => !search || (t.title + ' ' + t.description + ' ' + t.requester + ' ' + t.product + ' ' + t.type + ' ' + t.sector + ' ' + t.source + ' ' + t.project).toLowerCase().includes(search.toLowerCase());
@@ -271,13 +275,13 @@ function renderToday() {
 
 // ── BOARD ─────────────────────────────────────────────────────────────────────
 let draggedId = null, downXY = null;
-function renderBoardFilters() { document.getElementById('boardFilters').innerHTML = BOARD_FILTERS.map(f => `<button class="chip ${boardFilter === f.k ? 'on' : ''} ${f.danger ? 'danger' : ''}" data-bf="${f.k}">${f.label}</button>`).join(''); }
+function renderBoardFilters() { document.getElementById('boardFilters').innerHTML = BOARD_FILTERS.map(f => `<button class="chip ${f.k === 'all' ? (!boardFilters.length ? 'on' : '') : (boardFilters.includes(f.k) ? 'on' : '')} ${f.danger ? 'danger' : ''}" data-bf="${f.k}">${f.label}</button>`).join(''); }
 function renderBoard() {
   renderBoardFilters();
   const cols = [['todo', 'To do'], ['in_progress', 'In progress'], ['blocked', 'Blocked'], ['done', 'Done']];
   const card = t => `<div class="kcard pl-${t.priority}" draggable="true" data-card="${t.id}"><div class="kt">${esc(t.title) || 'untitled'}</div><div class="km">${t.deadline ? `<span class="due ${t.status !== 'done' && relDays(t.deadline) < 0 ? 'over' : (t.status !== 'done' && relDays(t.deadline) <= 2 ? 'soon' : '')}">${fmtDate(t.deadline)}</span>` : ''}${t.type ? `<span class="tag type">${esc(t.type)}</span>` : ''}${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}${t.sector ? `<span class="tag sec-tag">${esc(t.sector)}</span>` : ''}${t.priority ? `<span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span>` : ''}${sprintBadge(t)}${directiveBadge(t)}${replyBadge(t)}</div>${t.progress ? `<div class="kmini"><i style="width:${t.progress}%"></i></div>` : ''}</div>`;
   document.getElementById('board').innerHTML = cols.map(([k, label]) => {
-    const items = tasks.filter(t => t.status === k && boardMatch(t, boardFilter) && matchSearch(t)).sort((a, b) => { const o = { urgent: 0, high: 1, medium: 2, low: 3 }; const ra = relDays(a.deadline), rb = relDays(b.deadline); if (ra !== rb) { if (ra === null) return 1; if (rb === null) return -1; return ra - rb; } return o[a.priority] - o[b.priority]; });
+    const items = tasks.filter(t => t.status === k && boardMatch(t) && matchSearch(t)).sort((a, b) => { const o = { urgent: 0, high: 1, medium: 2, low: 3 }; const ra = relDays(a.deadline), rb = relDays(b.deadline); if (ra !== rb) { if (ra === null) return 1; if (rb === null) return -1; return ra - rb; } return o[a.priority] - o[b.priority]; });
     const warn = k === 'in_progress' && items.length > 5 ? 'warn' : '';
     return `<div class="kcol" data-col="${k}"><div class="kcol-head"><div class="ktitle"><span class="kdot" style="background:${STAT_COLOR[k]}"></span>${label} <span class="kn ${warn}">${items.length}${warn ? ' ⚠' : ''}</span></div><button class="kadd" data-kadd="${k}">＋</button></div><div class="klist">${items.length ? items.map(card).join('') : '<div class="kempty">Drop tasks here</div>'}</div></div>`;
   }).join('');
@@ -341,15 +345,16 @@ function renderTable() {
   let arr = tasks.filter(t => matchesFilter(t, filter) && matchSearch(t));
   const po = { urgent: 0, high: 1, medium: 2, low: 3 }, so = { todo: 0, in_progress: 1, blocked: 2, done: 3 };
   arr.sort((a, b) => {
+    // Done tasks always go to the bottom (except when sorting by status, createdAt or num)
+    if (sortCol !== 'status' && sortCol !== 'createdAt' && sortCol !== 'num') {
+      const aDone = a.status === 'done', bDone = b.status === 'done';
+      if (aDone !== bDone) return aDone ? 1 : -1;
+    }
     let va = a[sortCol], vb = b[sortCol];
     if (sortCol === 'priority') { va = po[a.priority]; vb = po[b.priority]; }
     if (sortCol === 'status') { va = so[a.status]; vb = so[b.status]; }
     if (sortCol === 'num') { va = a.num || 0; vb = b.num || 0; }
-    if (sortCol === 'deadline') {
-      const aDone = a.status === 'done', bDone = b.status === 'done';
-      if (aDone !== bDone) return aDone ? 1 : -1;
-      va = parseDate(a.deadline) ? parseDate(a.deadline).getTime() : 9e15; vb = parseDate(b.deadline) ? parseDate(b.deadline).getTime() : 9e15;
-    }
+    if (sortCol === 'deadline') { va = parseDate(a.deadline) ? parseDate(a.deadline).getTime() : 9e15; vb = parseDate(b.deadline) ? parseDate(b.deadline).getTime() : 9e15; }
     if (sortCol === 'createdAt') { va = new Date(a.createdAt || 0).getTime(); vb = new Date(b.createdAt || 0).getTime(); }
     if (sortCol === 'daysLeft') { va = relDays(a.deadline) ?? 9999; vb = relDays(b.deadline) ?? 9999; }
     if (typeof va === 'string') va = va.toLowerCase();
@@ -1314,7 +1319,7 @@ document.addEventListener('click', e => {
   const nav = e.target.closest('.nav-item'); if (nav) { show(nav.dataset.tab); return; }
   const f = e.target.closest('[data-f]'); if (f) { filter = f.dataset.f; renderFilters(); renderTable(); return; }
   const sq = e.target.closest('[data-sq]'); if (sq) { const [col, dir] = sq.dataset.sq.split(':'); sortCol = col; sortDir = parseInt(dir); renderFilters(); renderTable(); return; }
-  const bf = e.target.closest('[data-bf]'); if (bf) { boardFilter = bf.dataset.bf; renderBoard(); return; }
+  const bf = e.target.closest('[data-bf]'); if (bf) { const k = bf.dataset.bf; if (k === 'all') { boardFilters = []; } else if (boardFilters.includes(k)) { boardFilters = boardFilters.filter(x => x !== k); } else { boardFilters.push(k); } renderBoard(); return; }
   const dp = e.target.closest('[data-dp]'); if (dp) { dashPeriod = dp.dataset.dp; renderDashboard(); return; }
   const th = e.target.closest('th[data-sort]'); if (th) { const c = th.dataset.sort; if (sortCol === c) sortDir *= -1; else { sortCol = c; sortDir = 1; } renderTable(); return; }
   const star = e.target.closest('[data-star]'); if (star) { e.stopPropagation(); toggleFocus(star.dataset.star); return; }
