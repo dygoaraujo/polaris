@@ -502,7 +502,7 @@ function openModal(task) {
     } catch(e) { box.innerHTML = e.message === 'NO_KEY' ? `<div class="tutor">Add an Anthropic API key in Settings to turn on the English tutor.</div>` : `<div class="tutor">Couldn't reach the tutor right now — you can still save the task.</div>`; }
   }
 
-  document.getElementById('mSave').onclick = async () => {
+  const commitSave = async () => {
     const v = id => document.getElementById(id).value;
     const obj = { id: t.id || uid(), num: t.num || nextNum(), title: v('f-title').trim(), description: v('f-desc').trim(), requester: t.requester || '', product: v('f-prod').trim(), type: v('f-type'), sector: v('f-sector'), source: t.source || '', sprint: document.getElementById('f-sprint').checked, project: t.project || '', deadline: v('f-due'), priority: v('f-prio'), status: v('f-status'), progress: parseInt(v('f-prog')) || 0, hours: parseFloat(v('f-hours')) || 0, blockers: v('f-block').trim(), notes: v('f-notes').trim(), contacts: clog, createdAt: t.createdAt || new Date().toISOString(), completedAt: t.completedAt || null };
     const compField = document.getElementById('f-comp');
@@ -510,9 +510,26 @@ function openModal(task) {
     if (obj.progress >= 100 && obj.status !== 'done') { obj.status = 'done'; obj.completedAt = new Date().toISOString(); }
     if (!obj.title && !obj.description) { toast('Add at least a title'); return; }
     if (t.id) tasks = tasks.map(x => x.id === t.id ? obj : x); else tasks.unshift(obj);
-    const wasNew = !t.id;
     await saveTasks(); close(); toast(t.id ? 'Task updated ✓' : 'Task added ✓');
-    if (wasNew) autoCorrect((obj.title + (obj.description ? '. ' + obj.description : '')).trim(), obj.id);
+  };
+  document.getElementById('mSave').onclick = async () => {
+    const title = document.getElementById('f-title').value.trim(), desc = document.getElementById('f-desc').value.trim();
+    const text = (title + (desc ? '. ' + desc : '')).trim();
+    // Pre-save English check (only for new tasks, when the tutor is on)
+    if (t.id || !hasApiKey() || !text) return commitSave();
+    const box = document.getElementById('tutorBox');
+    box.innerHTML = `<div class="tutor"><span class="spin"></span> Checking your English before saving…</div>`;
+    const sys = `You are an English tutor for a Brazilian mechanical/industrial engineer. Check grammar, word choice and natural phrasing in a professional engineering register. Reply ONLY strict JSON, no markdown:\n{"ok":boolean,"corrected":"corrected full text","notes":[{"issue":"short error category like 'article','verb tense','preposition','word choice','plural','word order'","why":"one-sentence rule in English"}]}\nIf already correct: ok=true, corrected=same text, notes=[].`;
+    let data;
+    try { data = JSON.parse((await callClaude(sys, text)).replace(/```json|```/g, '').trim()); }
+    catch(e) { box.innerHTML = `<div class="tutor">Couldn't reach the tutor — saving as written.</div>`; return commitSave(); }
+    if (data.ok && (!data.notes || !data.notes.length)) { box.innerHTML = `<div class="tutor good"><div class="ttl">✓ Looks good</div>Saving…</div>`; return commitSave(); }
+    // Errors found — log them and let the user decide
+    logMistake(text, data.corrected, data.notes, t.id || null);
+    const applyCorrection = () => { const c = data.corrected; if (desc) { const i = c.indexOf('. '); if (i > -1) { document.getElementById('f-title').value = c.slice(0, i).replace(/\.$/, ''); document.getElementById('f-desc').value = c.slice(i + 2); } else { document.getElementById('f-title').value = c; } } else { document.getElementById('f-title').value = c.replace(/\.$/, ''); } };
+    box.innerHTML = `<div class="tutor"><div class="ttl">🌐 Before you save — let's fix this</div><div class="fix"><b>Suggested:</b> ${esc(data.corrected)}</div>${data.notes.length ? '<ul>' + data.notes.map(n => `<li><b>${esc(n.issue)}:</b> ${esc(n.why)}</li>`).join('') + '</ul>' : ''}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn sm primary" id="useFixSave">✓ Use correction & save</button><button class="btn sm" id="saveAnyway">Save as I wrote it</button></div></div>`;
+    document.getElementById('useFixSave').onclick = () => { applyCorrection(); commitSave(); };
+    document.getElementById('saveAnyway').onclick = () => commitSave();
   };
 }
 
