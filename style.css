@@ -247,6 +247,12 @@ tr.addrow input,tr.addrow select{color-scheme:dark}
 .miss-corr{color:var(--green);font-size:13.5px;margin-top:2px}
 .miss-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
 .miss-tag{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--txt-faint);background:var(--line);padding:1px 7px;border-radius:5px}
+.kind-tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:20px}
+.kind-expression{background:var(--teal-soft);color:var(--teal)}.kind-word{background:var(--line);color:var(--txt-dim)}
+.vcard-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;border-top:1px solid var(--line-soft);padding-top:8px}
+.vcard-due{font-family:var(--mono);font-size:10.5px;color:var(--txt-faint)}
+.due-now{color:var(--amber)}
+.rev-done{text-align:center;padding:30px 20px}.rev-done .big{font-family:var(--display);font-weight:800;font-size:22px;margin-bottom:8px}.rev-done div{color:var(--txt-dim)}
 
 /* WEEK SUMMARY */
 .week-summary-panel{background:linear-gradient(150deg,rgba(57,217,138,.07),var(--panel));border:1px solid rgba(57,217,138,.2)}

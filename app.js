@@ -547,12 +547,29 @@ async function logMistake(original, corrected, notes, taskId) {
 
 // ── VOCAB ─────────────────────────────────────────────────────────────────────
 async function saveVocab() { await sset('vocab', vocab); }
+// ── SPACED REPETITION (SM-2 lite) ──────────────────────────────────────────────
+function dKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function todayKey() { return dKey(new Date()); }
+function addDaysKey(n) { const d = new Date(); d.setDate(d.getDate() + n); return dKey(d); }
+function srsInit(v) { if (v.interval === undefined) v.interval = 0; if (v.ease === undefined) v.ease = 2.3; if (v.reps === undefined) v.reps = 0; if (!v.due) v.due = todayKey(); if (!v.kind) v.kind = 'word'; }
+function srsStatus(v) { if (v.interval >= 21) return 'known'; if (v.reps >= 1) return 'learning'; return 'new'; }
+function srsDue(v) { return (v.due || todayKey()) <= todayKey(); }
+function dueCards() { return vocab.filter(srsDue); }
+function srsReview(v, grade) {
+  srsInit(v);
+  if (grade === 'again') { v.reps = 0; v.interval = 0; v.ease = Math.max(1.3, v.ease - 0.2); v.due = todayKey(); }
+  else if (grade === 'good') { v.interval = v.reps === 0 ? 1 : v.reps === 1 ? 3 : Math.round(v.interval * v.ease); v.reps++; v.due = addDaysKey(v.interval); }
+  else if (grade === 'easy') { v.interval = v.reps === 0 ? 2 : Math.round(v.interval * v.ease * 1.4); v.ease = Math.min(2.8, v.ease + 0.1); v.reps++; v.due = addDaysKey(v.interval); }
+  v.status = srsStatus(v);
+}
 function renderVocab() {
   renderEnStats();
   renderMistakes();
+  const due = dueCards().length;
+  const fb = document.getElementById('flashBtn'); if (fb && !fcOn) fb.innerHTML = `🃏 Review${due ? ' (' + due + ' due)' : ''}`;
   const grid = document.getElementById('vocabGrid');
-  if (!vocab.length) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="big">No vocabulary yet</div><div>Write tasks in English, then hit "Mine vocabulary" to extract technical terms.</div></div>`; return; }
-  grid.innerHTML = vocab.map(v => `<div class="vcard"><div class="term">${esc(v.term)} <span class="vstat vs-${v.status}" data-cycle="${v.id}">${v.status}</span></div><div class="tr">${esc(v.translation)}</div>${v.example ? `<div class="ex">"${esc(v.example)}"</div>` : ''}</div>`).join('');
+  if (!vocab.length) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="big">No vocabulary yet</div><div>Write tasks in English, then hit "Mine vocabulary" to extract technical terms and expressions.</div></div>`; return; }
+  grid.innerHTML = vocab.map(v => { const st = srsStatus(v); const dueTxt = srsDue(v) ? '<span class="due-now">due now</span>' : `next: ${v.due || '—'}`; return `<div class="vcard"><div class="term">${esc(v.term)} <span class="vstat vs-${st}" data-cycle="${v.id}">${st}</span></div><div class="tr">${esc(v.translation)}</div>${v.example ? `<div class="ex">"${esc(v.example)}"</div>` : ''}<div class="vcard-foot"><span class="kind-tag kind-${v.kind || 'word'}">${v.kind === 'expression' ? 'expression' : 'word'}</span><span class="vcard-due">${dueTxt}</span></div></div>`; }).join('');
 }
 function renderEnStats() {
   const el = document.getElementById('enStats'); if (!el) return;
@@ -564,6 +581,7 @@ function renderEnStats() {
   const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
   const aiOn = hasApiKey();
   el.innerHTML = `
+    <div class="en-stat"><div class="k">Due for review</div><div class="v" style="color:${dueCards().length ? 'var(--amber)' : 'var(--green)'}">${dueCards().length}</div><div class="sub">${dueCards().length ? 'tap Review to study' : 'all caught up'}</div></div>
     <div class="en-stat"><div class="k">Vocabulary</div><div class="v">${vocab.length}</div><div class="sub">${known} known · ${learning} learning · ${fresh} new</div></div>
     <div class="en-stat"><div class="k">Corrections logged</div><div class="v">${mistakes.length}</div><div class="sub">${top ? 'top: ' + esc(top[0]) + ' (' + top[1] + ')' : 'none yet'}</div></div>
     <div class="en-stat"><div class="k">English tutor</div><div class="v" style="font-size:18px;color:${aiOn ? 'var(--green)' : 'var(--txt-faint)'}">${aiOn ? '● ON' : '○ off'}</div><div class="sub">${aiOn ? 'auto-corrects on save' : 'add API key in Settings'}</div></div>`;
@@ -590,27 +608,50 @@ async function mineVocab() {
   if (!corpus) { toast('Add some tasks in English first'); return; }
   const existing = vocab.map(v => v.term.toLowerCase());
   const btn = document.getElementById('mineBtn'); btn.innerHTML = `<span class="spin"></span> Mining…`; btn.disabled = true;
-  const sys = `You extract engineering / technical English vocabulary worth studying from task notes by a Brazilian engineer learning English. Pick useful words or short collocations; skip trivial words. Give a Brazilian Portuguese translation and a short natural English example. Reply ONLY strict JSON:\n{"terms":[{"term":"...","translation":"...","example":"..."}]}\nMax 12 terms. Exclude already-known: ${existing.join(', ') || '(none)'}.`;
+  const sys = `You extract technical English worth studying from task notes by a Brazilian mechanical/industrial engineer learning English. PRIORITIZE multi-word expressions and collocations engineers actually say (e.g. "lead time", "bill of materials", "tighten the tolerance", "sign-off from", "lead time with the supplier") over isolated single words — these teach how English is really built. Only include a single word if it's genuinely useful technical vocabulary. Skip trivial words. For each item give: the English expression/word, a natural Brazilian Portuguese translation, a short natural English example sentence, and kind ("expression" for multi-word collocations, "word" for single words). Reply ONLY strict JSON:\n{"terms":[{"term":"...","translation":"...","example":"...","kind":"expression|word"}]}\nMax 12 items, favoring expressions. Exclude already-known: ${existing.join(', ') || '(none)'}.`;
   try {
-    const out = await callClaude(sys, corpus, 1000);
+    const out = await callClaude(sys, corpus, 1200);
     const data = JSON.parse(out.replace(/```json|```/g, '').trim());
     let added = 0;
-    (data.terms || []).forEach(tm => { if (!tm.term) return; if (vocab.some(v => v.term.toLowerCase() === tm.term.toLowerCase())) return; vocab.unshift({ id: uid(), term: tm.term, translation: tm.translation || '', example: tm.example || '', status: 'new', addedAt: new Date().toISOString() }); added++; });
-    await saveVocab(); refreshAll(); toast(added ? `${added} new term${added > 1 ? 's' : ''} added 📖` : 'No new terms found');
+    (data.terms || []).forEach(tm => { if (!tm.term) return; if (vocab.some(v => v.term.toLowerCase() === tm.term.toLowerCase())) return; const card = { id: uid(), term: tm.term, translation: tm.translation || '', example: tm.example || '', kind: tm.kind === 'expression' ? 'expression' : 'word', status: 'new', addedAt: new Date().toISOString() }; srsInit(card); vocab.unshift(card); added++; });
+    await saveVocab(); refreshAll(); toast(added ? `${added} new item${added > 1 ? 's' : ''} added 📖` : 'No new items found');
   } catch(e) { toast(e.message === 'NO_KEY' ? 'Add an API key in Settings first' : 'Mining failed — try again'); }
-  btn.innerHTML = `⛏️ Mine from tasks`; btn.disabled = false;
+  btn.innerHTML = `⛏️ Mine vocabulary`; btn.disabled = false;
 }
-let fcOn = false, fcIdx = 0;
-function toggleFlash() { fcOn = !fcOn; document.getElementById('flashArea').classList.toggle('hide', !fcOn); document.getElementById('flashBtn').classList.toggle('primary', fcOn); if (fcOn) { fcIdx = 0; renderFlash(); } }
+let fcOn = false, revQueue = [], revFlip = false, revDoneCount = 0;
+function toggleFlash() {
+  fcOn = !fcOn;
+  document.getElementById('flashArea').classList.toggle('hide', !fcOn);
+  document.getElementById('flashBtn').classList.toggle('primary', fcOn);
+  if (fcOn) { revQueue = dueCards().map(v => v.id); revDoneCount = 0; revFlip = false; renderFlash(); document.getElementById('flashArea').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+}
 function renderFlash() {
   const area = document.getElementById('flashArea');
-  if (!vocab.length) { area.innerHTML = `<div class="empty">Mine some vocabulary first.</div>`; return; }
-  const v = vocab[fcIdx % vocab.length];
-  area.innerHTML = `<div class="fc-wrap"><div class="flashcard" id="fcard"><div class="fc-inner"><div class="fc-face fc-front"><div><div class="term">${esc(v.term)}</div><div class="hint">tap to reveal</div></div></div><div class="fc-face fc-back"><div><div class="tr">${esc(v.translation)}</div>${v.example ? `<div class="ex">"${esc(v.example)}"</div>` : ''}</div></div></div></div><div class="fc-count">${(fcIdx % vocab.length) + 1} / ${vocab.length}</div><div class="fc-controls"><button class="btn" id="fcLearn" style="color:var(--blue)">↻ Still learning</button><button class="btn" id="fcKnow" style="color:var(--green)">✓ I know this</button></div></div>`;
-  const card = document.getElementById('fcard'); card.onclick = () => card.classList.toggle('flip');
-  const next = async st => { v.status = st; await saveVocab(); fcIdx++; renderFlash(); renderVocab(); updateTabCounts(); };
-  document.getElementById('fcLearn').onclick = () => next('learning');
-  document.getElementById('fcKnow').onclick = () => next('known');
+  if (!vocab.length) { area.innerHTML = `<div class="empty">Mine some vocabulary first, then come back to review.</div>`; return; }
+  if (!revQueue.length) {
+    const next = vocab.map(v => v.due).filter(Boolean).sort()[0];
+    area.innerHTML = `<div class="fc-wrap"><div class="rev-done"><div class="big">🎉 All caught up!</div><div>${revDoneCount ? 'You reviewed ' + revDoneCount + ' card' + (revDoneCount > 1 ? 's' : '') + ' today.' : 'Nothing due right now.'}${next && next > todayKey() ? '<br>Next review: ' + next : ''}</div><button class="btn sm" id="revAll" style="margin-top:12px">Review all anyway</button></div></div>`;
+    const ra = document.getElementById('revAll'); if (ra) ra.onclick = () => { revQueue = vocab.map(v => v.id); revFlip = false; renderFlash(); };
+    return;
+  }
+  const v = vocab.find(x => x.id === revQueue[0]); if (!v) { revQueue.shift(); return renderFlash(); }
+  const kindTag = `<span class="kind-tag kind-${v.kind || 'word'}">${v.kind === 'expression' ? 'expression' : 'word'}</span>`;
+  const front = `<div class="fc-face fc-front"><div>${kindTag}<div class="tr" style="font-size:26px;margin-top:10px">${esc(v.translation || '—')}</div><div class="hint">say it in English · tap to reveal</div></div></div>`;
+  const back = `<div class="fc-face fc-back"><div><div class="term" style="font-size:26px">${esc(v.term)}</div>${v.example ? `<div class="ex">"${esc(v.example)}"</div>` : ''}</div></div>`;
+  const controls = revFlip
+    ? `<div class="fc-controls"><button class="btn" id="gAgain" style="color:var(--red)">✗ Again</button><button class="btn" id="gGood" style="color:var(--blue)">○ Good</button><button class="btn primary" id="gEasy">✓ Easy</button></div>`
+    : `<div class="fc-controls"><button class="btn primary" id="reveal">Reveal answer</button></div>`;
+  area.innerHTML = `<div class="fc-wrap"><div class="flashcard${revFlip ? ' flip' : ''}" id="fcard"><div class="fc-inner">${front}${back}</div></div><div class="fc-count">${revDoneCount + 1} of ${revDoneCount + revQueue.length} · ${revQueue.length} left</div>${controls}</div>`;
+  const card = document.getElementById('fcard'); card.onclick = () => { revFlip = true; renderFlash(); };
+  const rv = document.getElementById('reveal'); if (rv) rv.onclick = () => { revFlip = true; renderFlash(); };
+  const grade = async g => {
+    srsReview(v, g);
+    await saveVocab();
+    revQueue.shift();
+    if (g === 'again') revQueue.push(v.id); else revDoneCount++;
+    revFlip = false; renderFlash(); renderEnStats(); updateTabCounts();
+  };
+  ['gAgain:again', 'gGood:good', 'gEasy:easy'].forEach(p => { const [id, g] = p.split(':'); const b = document.getElementById(id); if (b) b.onclick = () => grade(g); });
 }
 
 function groupCount(arr, field) { const m = {}; arr.forEach(t => { const v = (t[field] || '').trim() || '(none)'; m[v] = (m[v] || 0) + 1; }); return Object.entries(m).map(([label, n]) => ({ label, n })).sort((a, b) => b.n - a.n); }
@@ -1444,6 +1485,7 @@ document.getElementById('logoutBtn').onclick = () => { localStorage.removeItem(A
   });
   if (tasks.some(t => !t.num)) { const ord = [...tasks].sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0)); ord.forEach((t, i) => { if (!t.num) t.num = i + 1; }); await sset('tasks', tasks); }
   vocab = await sget('vocab', []); ideas = await sget('ideas', []); supplierSearches = await sget('supplierSearches', []); mistakes = await sget('mistakes', []);
+  vocab.forEach(srsInit);
   if (settings.collapsed) document.getElementById('sidebar').classList.add('collapsed');
   const n = new Date(); calY = n.getFullYear(); calM = n.getMonth();
   if (!getToken()) setSyncStatus('idle', 'Token not set — open Settings to enable sync');
