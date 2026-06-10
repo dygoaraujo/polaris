@@ -77,7 +77,7 @@ async function sset(k, v) {
 // ── Gist sync ────────────────────────────────────────────────────────────────
 const GIST_ID = 'd58f9448582e6aeef638dfd28b2482a7';
 const GIST_FILE = 'polaris-data.json';
-const GIST_KEYS = ['tasks', 'vocab', 'ideas', 'settings', 'supplierSearches'];
+const GIST_KEYS = ['tasks', 'vocab', 'ideas', 'settings', 'supplierSearches', 'mistakes'];
 let gistTimer = null;
 
 function getToken() { return localStorage.getItem('polaris_gh_token') || ''; }
@@ -115,7 +115,7 @@ async function gistSave() {
 function scheduleGistSave() { clearTimeout(gistTimer); gistTimer = setTimeout(gistSave, 3000); }
 
 // ── State ────────────────────────────────────────────────────────────────────
-let tasks = [], vocab = [], ideas = [], settings = {};
+let tasks = [], vocab = [], ideas = [], settings = {}, mistakes = [];
 let current = 'today', filter = 'all', boardFilters = [], dashPeriod = 'month';
 let search = '', sortCol = 'createdAt', sortDir = -1, calY, calM, calSel = null;
 let addRowOpen = false;
@@ -124,7 +124,7 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 const PRIOS = { urgent: 'Urgent', high: 'High', medium: 'Medium', low: 'Low' };
 const STATUSES = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' };
 const STAT_COLOR = { todo: 'var(--txt-faint)', in_progress: 'var(--blue)', blocked: 'var(--red)', done: 'var(--green)' };
-const TITLES = { today: 'Today', board: 'Board', calendar: 'Calendar', table: 'All Activities', dashboard: 'Dashboard', supplier: 'Supplier Hub', products: 'Products', vocab: 'Vocabulary', ideas: 'Backlog & Ideas', settings: 'Settings' };
+const TITLES = { today: 'Today', board: 'Board', calendar: 'Calendar', table: 'All Activities', dashboard: 'Dashboard', supplier: 'Supplier Hub', products: 'Products', vocab: 'English Lab', ideas: 'Backlog & Ideas', settings: 'Settings' };
 const DEFAULTS = { name: 'Rodrigo', types: ['Project document', 'Mechanical test', 'System registration', 'Research', 'Supplier dealing', 'Meeting', 'Production support'], sectors: ['Engineering', 'Production', 'Maintenance', 'Planning', 'Quality', 'Personal'], products: ['P-204 Pump', 'Conveyor C-12', 'Line 3'], sources: ['Project Sprint', 'Coordinator', 'Director', 'Production', 'Self'], projects: [], template: ['Product specification', 'Technical drawing', 'Test report', 'System registration'], calendar: {}, focusDate: '', focusIds: [], collapsed: false };
 
 const DAY = 86400000;
@@ -497,8 +497,9 @@ function openModal(task) {
       else {
         box.innerHTML = `<div class="tutor"><div class="ttl">🌐 Tutor feedback</div><div class="fix"><b>Suggested:</b> ${esc(data.corrected)} <button class="btn sm" style="margin-left:8px;padding:3px 9px" id="applyFix">Use this</button></div>${data.notes && data.notes.length ? '<ul>' + data.notes.map(n => `<li><b>${esc(n.issue)}:</b> ${esc(n.why)}</li>`).join('') + '</ul>' : ''}</div>`;
         const af = document.getElementById('applyFix'); if (af) af.onclick = () => { document.getElementById('f-title').value = data.corrected.split('. ')[0].replace(/\.$/, ''); if (desc) document.getElementById('f-desc').value = data.corrected; };
+        logMistake(text, data.corrected, data.notes, t.id);
       }
-    } catch(e) { box.innerHTML = `<div class="tutor">Couldn't reach the tutor right now — you can still save the task.</div>`; }
+    } catch(e) { box.innerHTML = e.message === 'NO_KEY' ? `<div class="tutor">Add an Anthropic API key in Settings to turn on the English tutor.</div>` : `<div class="tutor">Couldn't reach the tutor right now — you can still save the task.</div>`; }
   }
 
   document.getElementById('mSave').onclick = async () => {
@@ -509,25 +510,82 @@ function openModal(task) {
     if (obj.progress >= 100 && obj.status !== 'done') { obj.status = 'done'; obj.completedAt = new Date().toISOString(); }
     if (!obj.title && !obj.description) { toast('Add at least a title'); return; }
     if (t.id) tasks = tasks.map(x => x.id === t.id ? obj : x); else tasks.unshift(obj);
+    const wasNew = !t.id;
     await saveTasks(); close(); toast(t.id ? 'Task updated ✓' : 'Task added ✓');
+    if (wasNew) autoCorrect((obj.title + (obj.description ? '. ' + obj.description : '')).trim(), obj.id);
   };
 }
 
 // ── CLAUDE API ────────────────────────────────────────────────────────────────
+function getApiKey() { try { return localStorage.getItem('polaris_api_key') || ''; } catch(e) { return ''; } }
+function hasApiKey() { return !!getApiKey(); }
 async function callClaude(system, userText, maxTokens = 1000) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: maxTokens, system, messages: [{ role: "user", content: userText }] }) });
+  const key = getApiKey();
+  if (!key) throw new Error("NO_KEY");
+  const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: "claude-haiku-4-5", max_tokens: maxTokens, system, messages: [{ role: "user", content: userText }] }) });
   if (!res.ok) throw new Error("API " + res.status);
   const data = await res.json();
   return data.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+}
+// Background correction fired when a new task is saved (silent if no API key)
+async function autoCorrect(text, taskId) {
+  if (!hasApiKey() || !text) return;
+  const sys = `You are an English tutor for a Brazilian mechanical/industrial engineer who writes task descriptions in English to practice. Check grammar, word choice and natural phrasing in a professional engineering register. Reply ONLY with strict JSON, no markdown:\n{"ok":boolean,"corrected":"corrected full text","notes":[{"issue":"short error category like 'article','verb tense','preposition','word choice','plural','word order'","why":"one-sentence rule explanation in English"}]}\nIf already correct: ok=true, corrected=same text, notes=[].`;
+  try {
+    const out = await callClaude(sys, text);
+    const data = JSON.parse(out.replace(/```json|```/g, '').trim());
+    if (data.notes && data.notes.length) { await logMistake(text, data.corrected, data.notes, taskId); toast(`📝 ${data.notes.length} English note${data.notes.length > 1 ? 's' : ''} logged — see Vocabulary`); if (current === 'vocab') renderVocab(); }
+  } catch(e) {}
+}
+// Records a correction into the persistent mistakes journal
+async function logMistake(original, corrected, notes, taskId) {
+  if (!notes || !notes.length) return;
+  mistakes.unshift({ id: uid(), original, corrected, errors: notes.map(n => ({ type: (n.issue || 'other').toLowerCase().trim(), explanation: n.why || '' })), at: new Date().toISOString(), taskId: taskId || null });
+  if (mistakes.length > 500) mistakes = mistakes.slice(0, 500);
+  await sset('mistakes', mistakes);
 }
 
 // ── VOCAB ─────────────────────────────────────────────────────────────────────
 async function saveVocab() { await sset('vocab', vocab); }
 function renderVocab() {
-  if (!vocab.length) { document.getElementById('vocabGrid').innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="big">No vocabulary yet</div><div>Add tasks in English, then hit "Mine from tasks".</div></div>`; return; }
-  document.getElementById('vocabGrid').innerHTML = vocab.map(v => `<div class="vcard"><div class="term">${esc(v.term)} <span class="vstat vs-${v.status}" data-cycle="${v.id}">${v.status}</span></div><div class="tr">${esc(v.translation)}</div>${v.example ? `<div class="ex">"${esc(v.example)}"</div>` : ''}</div>`).join('');
+  renderEnStats();
+  renderMistakes();
+  const grid = document.getElementById('vocabGrid');
+  if (!vocab.length) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="big">No vocabulary yet</div><div>Write tasks in English, then hit "Mine vocabulary" to extract technical terms.</div></div>`; return; }
+  grid.innerHTML = vocab.map(v => `<div class="vcard"><div class="term">${esc(v.term)} <span class="vstat vs-${v.status}" data-cycle="${v.id}">${v.status}</span></div><div class="tr">${esc(v.translation)}</div>${v.example ? `<div class="ex">"${esc(v.example)}"</div>` : ''}</div>`).join('');
+}
+function renderEnStats() {
+  const el = document.getElementById('enStats'); if (!el) return;
+  const known = vocab.filter(v => v.status === 'known').length;
+  const learning = vocab.filter(v => v.status === 'learning').length;
+  const fresh = vocab.filter(v => v.status === 'new').length;
+  // top recurring error type
+  const counts = {}; mistakes.forEach(m => (m.errors || []).forEach(e => { counts[e.type] = (counts[e.type] || 0) + 1; }));
+  const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  const aiOn = hasApiKey();
+  el.innerHTML = `
+    <div class="en-stat"><div class="k">Vocabulary</div><div class="v">${vocab.length}</div><div class="sub">${known} known · ${learning} learning · ${fresh} new</div></div>
+    <div class="en-stat"><div class="k">Corrections logged</div><div class="v">${mistakes.length}</div><div class="sub">${top ? 'top: ' + esc(top[0]) + ' (' + top[1] + ')' : 'none yet'}</div></div>
+    <div class="en-stat"><div class="k">English tutor</div><div class="v" style="font-size:18px;color:${aiOn ? 'var(--green)' : 'var(--txt-faint)'}">${aiOn ? '● ON' : '○ off'}</div><div class="sub">${aiOn ? 'auto-corrects on save' : 'add API key in Settings'}</div></div>`;
+}
+function renderMistakes() {
+  const el = document.getElementById('mistakesPanel'); if (!el) return;
+  if (!mistakes.length) {
+    el.innerHTML = `<h3 class="en-h">⚠️ Your recurring mistakes</h3><div class="empty"><div>${hasApiKey() ? 'No corrections yet — create a task in English and the tutor will log what to fix here.' : 'Turn on the English tutor in Settings to auto-log your mistakes as you create tasks in English.'}</div></div>`;
+    return;
+  }
+  const counts = {}; mistakes.forEach(m => (m.errors || []).forEach(e => { (counts[e.type] = counts[e.type] || { n: 0, ex: e.explanation }).n++; }));
+  const ranked = Object.entries(counts).sort((a, b) => b[1].n - a[1].n);
+  const chips = ranked.map(([type, d]) => `<div class="miss-chip" title="${esc(d.ex)}"><b>${esc(type)}</b><span>${d.n}</span></div>`).join('');
+  const recent = mistakes.slice(0, 6).map(m => `<div class="miss-row"><div class="miss-orig">${esc(m.original)}</div><div class="miss-corr">→ ${esc(m.corrected)}</div>${(m.errors || []).length ? `<div class="miss-tags">${m.errors.map(e => `<span class="miss-tag">${esc(e.type)}</span>`).join('')}</div>` : ''}</div>`).join('');
+  el.innerHTML = `<h3 class="en-h">⚠️ Your recurring mistakes <button class="btn sm" id="clearMiss" style="margin-left:auto;font-size:11px">Clear log</button></h3>
+    <div class="miss-chips">${chips}</div>
+    <div class="miss-recent-h">Recent corrections</div>
+    <div class="miss-list">${recent}</div>`;
+  const cb = document.getElementById('clearMiss'); if (cb) cb.onclick = async () => { if (await customConfirm('Clear all logged corrections?\nYour vocabulary deck stays.', { yes: 'Clear', no: 'Cancel', danger: true })) { mistakes = []; await sset('mistakes', mistakes); renderVocab(); toast('Corrections cleared'); } };
 }
 async function mineVocab() {
+  if (!hasApiKey()) { toast('Add an Anthropic API key in Settings to mine vocabulary'); return; }
   const corpus = tasks.map(t => `${t.title}. ${t.description}`).join('\n').trim();
   if (!corpus) { toast('Add some tasks in English first'); return; }
   const existing = vocab.map(v => v.term.toLowerCase());
@@ -539,7 +597,7 @@ async function mineVocab() {
     let added = 0;
     (data.terms || []).forEach(tm => { if (!tm.term) return; if (vocab.some(v => v.term.toLowerCase() === tm.term.toLowerCase())) return; vocab.unshift({ id: uid(), term: tm.term, translation: tm.translation || '', example: tm.example || '', status: 'new', addedAt: new Date().toISOString() }); added++; });
     await saveVocab(); refreshAll(); toast(added ? `${added} new term${added > 1 ? 's' : ''} added 📖` : 'No new terms found');
-  } catch(e) { toast('Mining failed — try again'); }
+  } catch(e) { toast(e.message === 'NO_KEY' ? 'Add an API key in Settings first' : 'Mining failed — try again'); }
   btn.innerHTML = `⛏️ Mine from tasks`; btn.disabled = false;
 }
 let fcOn = false, fcIdx = 0;
@@ -1212,6 +1270,7 @@ function renderSettings() {
     return `<div class="set-panel"><h4>${title}</h4><div class="sd">${desc}</div><div class="pills">${pills || '<span style="color:var(--txt-faint);font-size:13px">None yet.</span>'}</div><div class="addline"><input id="add-${field}" placeholder="Add new…"><button class="btn sm primary" data-add="${field}">Add</button></div></div>`;
   };
   let storedToken = ''; try { storedToken = localStorage.getItem('polaris_gh_token') || ''; } catch(e) {}
+  let storedKey = ''; try { storedKey = localStorage.getItem('polaris_api_key') || ''; } catch(e) {}
   document.getElementById('settingsBody').innerHTML = `<div class="set-grid">
     <div class="set-panel"><h4>Your name</h4><div class="sd">Used in the "Good morning" greeting on Today.</div><div class="addline"><input id="set-name" value="${esc(settings.name || '')}" placeholder="Your name"><button class="btn sm primary" id="saveName">Save</button></div></div>
     ${listPanel('Activity types', 'e.g. Project document, Mechanical test, Supplier dealing.', 'types')}
@@ -1224,6 +1283,11 @@ function renderSettings() {
     <div class="sd">Paste your GitHub token once. Data syncs automatically between all your devices.</div>
     <div class="addline" style="margin-bottom:10px"><input id="set-token" type="password" placeholder="GitHub token  ghp_…" value="${storedToken}"><button class="btn sm primary" id="saveToken">Save token</button></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn sm" id="syncNow">↑ Sync now</button><button class="btn sm" id="loadCloud">↓ Load from cloud</button></div>
+  </div>
+  <div class="set-panel" style="margin-top:14px">
+    <h4>🌐 English tutor — Claude API ${storedKey ? '<span style="color:var(--green);font-size:12px">● ON</span>' : '<span style="color:var(--txt-faint);font-size:12px">○ off</span>'}</h4>
+    <div class="sd">Optional. Paste an Anthropic API key to turn on automatic English correction when you save a task, and vocabulary mining. This is separate from your Claude Pro plan — it bills per use (a few cents a month). Leave empty to use the English Lab without AI. Get a key at console.anthropic.com.</div>
+    <div class="addline" style="margin-bottom:6px"><input id="set-apikey" type="password" placeholder="Anthropic API key  sk-ant-…" value="${storedKey}"><button class="btn sm primary" id="saveApiKey">Save key</button></div>
   </div>
   <div class="set-panel" style="margin-top:14px">
     <h4>Data</h4>
@@ -1248,12 +1312,13 @@ function renderSettings() {
   document.getElementById('setImport').onclick = () => document.getElementById('importFile').click();
   document.getElementById('saveToken').onclick = () => { const v = document.getElementById('set-token').value.trim(); if (!v) { toast('Paste your GitHub token first'); return; } try { localStorage.setItem('polaris_gh_token', v); } catch(e) {} toast('Token saved ✓ — syncing…'); gistSave(); };
   document.getElementById('syncNow').onclick = () => gistSave();
-  document.getElementById('loadCloud').onclick = async () => { const ok = await gistLoad(); if (ok) { tasks = lsGet('tasks') || tasks; vocab = lsGet('vocab') || vocab; ideas = lsGet('ideas') || ideas; const s = lsGet('settings'); if (s) settings = { ...DEFAULTS, ...s }; refreshAll(); toast('Loaded from cloud ✓'); } else toast('Nothing loaded — check your token'); };
+  document.getElementById('loadCloud').onclick = async () => { const ok = await gistLoad(); if (ok) { tasks = lsGet('tasks') || tasks; vocab = lsGet('vocab') || vocab; ideas = lsGet('ideas') || ideas; mistakes = lsGet('mistakes') || mistakes; const s = lsGet('settings'); if (s) settings = { ...DEFAULTS, ...s }; refreshAll(); toast('Loaded from cloud ✓'); } else toast('Nothing loaded — check your token'); };
+  const saveKeyBtn = document.getElementById('saveApiKey'); if (saveKeyBtn) saveKeyBtn.onclick = () => { const v = document.getElementById('set-apikey').value.trim(); try { localStorage.setItem('polaris_api_key', v); } catch(e) {} toast(v ? 'API key saved ✓ — English tutor is ON' : 'API key cleared'); };
 }
 
 // ── EXPORT / IMPORT ───────────────────────────────────────────────────────────
-function doExport() { const blob = new Blob([JSON.stringify({ tasks, vocab, ideas, settings, supplierSearches, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'polaris-backup-' + todayStr() + '.json'; a.click(); toast('Backup downloaded ⬇︎'); }
-function doImport(file) { const r = new FileReader(); r.onload = async () => { try { const d = JSON.parse(r.result); if (!await customConfirm('Import will replace all current data.\nThis cannot be undone.', { yes: 'Import', no: 'Cancel', danger: true })) return; tasks = d.tasks || []; vocab = d.vocab || []; ideas = d.ideas || []; supplierSearches = d.supplierSearches || []; if (d.settings) settings = { ...DEFAULTS, ...d.settings }; await sset('tasks', tasks); await sset('vocab', vocab); await sset('ideas', ideas); await sset('supplierSearches', supplierSearches); await sset('settings', settings); refreshAll(); toast('Backup restored ✓'); } catch(e) { toast('Invalid backup file'); } }; r.readAsText(file); }
+function doExport() { const blob = new Blob([JSON.stringify({ tasks, vocab, ideas, settings, supplierSearches, mistakes, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'polaris-backup-' + todayStr() + '.json'; a.click(); toast('Backup downloaded ⬇︎'); }
+function doImport(file) { const r = new FileReader(); r.onload = async () => { try { const d = JSON.parse(r.result); if (!await customConfirm('Import will replace all current data.\nThis cannot be undone.', { yes: 'Import', no: 'Cancel', danger: true })) return; tasks = d.tasks || []; vocab = d.vocab || []; ideas = d.ideas || []; supplierSearches = d.supplierSearches || []; mistakes = d.mistakes || []; if (d.settings) settings = { ...DEFAULTS, ...d.settings }; await sset('tasks', tasks); await sset('vocab', vocab); await sset('ideas', ideas); await sset('supplierSearches', supplierSearches); await sset('mistakes', mistakes); await sset('settings', settings); refreshAll(); toast('Backup restored ✓'); } catch(e) { toast('Invalid backup file'); } }; r.readAsText(file); }
 
 // ── INLINE PICKERS ────────────────────────────────────────────────────────────
 function showStatusPicker(id, anchorEl) {
@@ -1378,7 +1443,7 @@ document.getElementById('logoutBtn').onclick = () => { localStorage.removeItem(A
     if (!Array.isArray(t.contacts)) t.contacts = [];
   });
   if (tasks.some(t => !t.num)) { const ord = [...tasks].sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0)); ord.forEach((t, i) => { if (!t.num) t.num = i + 1; }); await sset('tasks', tasks); }
-  vocab = await sget('vocab', []); ideas = await sget('ideas', []); supplierSearches = await sget('supplierSearches', []);
+  vocab = await sget('vocab', []); ideas = await sget('ideas', []); supplierSearches = await sget('supplierSearches', []); mistakes = await sget('mistakes', []);
   if (settings.collapsed) document.getElementById('sidebar').classList.add('collapsed');
   const n = new Date(); calY = n.getFullYear(); calM = n.getMonth();
   if (!getToken()) setSyncStatus('idle', 'Token not set — open Settings to enable sync');

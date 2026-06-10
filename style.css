@@ -228,6 +228,26 @@ tr.addrow input,tr.addrow select{color-scheme:dark}
 .fc-back .ex{color:var(--txt-dim);margin-top:14px;font-style:italic;font-size:14px}
 .fc-controls{display:flex;gap:10px}.fc-count{font-family:var(--mono);font-size:12px;color:var(--txt-dim)}
 
+/* ENGLISH LAB */
+.en-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px}
+.en-stat{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r);padding:14px 16px}
+.en-stat .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-faint)}
+.en-stat .v{font-family:var(--display);font-weight:800;font-size:26px;margin-top:4px}
+.en-stat .sub{font-size:12px;color:var(--txt-dim);margin-top:3px}
+.en-panel{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r);padding:16px 18px;margin-bottom:20px}
+.en-h{font-family:var(--display);font-weight:700;font-size:16px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.miss-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.miss-chip{display:flex;align-items:center;gap:8px;background:var(--red-soft);border:1px solid rgba(255,94,108,.3);border-radius:30px;padding:5px 12px;font-size:13px;cursor:default}
+.miss-chip b{color:var(--red);text-transform:capitalize}
+.miss-chip span{font-family:var(--mono);font-size:11px;background:rgba(255,94,108,.25);color:var(--red);padding:1px 7px;border-radius:20px}
+.miss-recent-h{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-faint);border-top:1px solid var(--line-soft);padding-top:12px;margin-bottom:10px}
+.miss-list{display:flex;flex-direction:column;gap:10px}
+.miss-row{border-left:3px solid var(--line);padding:2px 0 2px 12px}
+.miss-orig{color:var(--txt-dim);font-size:13.5px;text-decoration:line-through;text-decoration-color:rgba(255,94,108,.5)}
+.miss-corr{color:var(--green);font-size:13.5px;margin-top:2px}
+.miss-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+.miss-tag{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--txt-faint);background:var(--line);padding:1px 7px;border-radius:5px}
+
 /* WEEK SUMMARY */
 .week-summary-panel{background:linear-gradient(150deg,rgba(57,217,138,.07),var(--panel));border:1px solid rgba(57,217,138,.2)}
 .ws-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-family:var(--display);font-weight:700;font-size:15px}
