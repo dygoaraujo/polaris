@@ -220,7 +220,8 @@ function frow(t) {
     return `<span class="due">${fmtDate(t.deadline)}</span>`;
   })();
   const starred = (settings.focusIds || []).includes(t.id);
-  return `<div class="frow ${t.status === 'done' ? 'done' : ''}" data-open="${t.id}">
+  const overCls = (t.status !== 'done' && r !== null && r < 0) ? ` overdue${r <= -3 ? ' overdue-high' : ''}` : '';
+  return `<div class="frow ${t.status === 'done' ? 'done' : ''}${overCls}" data-open="${t.id}">
     <div class="chk" data-toggle-done="${t.id}">✓</div>
     <div class="prio-bar prio-${t.priority}" style="height:30px"></div>
     <div class="ftitle">${esc(t.title) || '<i style="color:var(--txt-faint)">untitled</i>'}

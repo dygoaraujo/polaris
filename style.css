@@ -121,6 +121,11 @@ button{font-family:inherit;cursor:pointer}input,textarea,select{font-family:inhe
 .fb-over .ct{background:var(--red-soft);color:var(--red)}.fb-today .ct{background:var(--amber-soft);color:var(--amber)}.fb-next .ct{background:var(--line);color:var(--txt-dim)}.fb-reply .ct{background:var(--red-soft);color:var(--red)}
 .frow{display:flex;align-items:center;gap:13px;background:var(--panel);border:1px solid var(--line-soft);border-radius:12px;padding:12px 14px;margin-bottom:8px;transition:.15s;cursor:pointer}
 .frow:hover{border-color:var(--line)}.frow.done{opacity:.55}
+.frow.overdue{border-color:rgba(255,94,108,.55);background:linear-gradient(90deg,rgba(255,94,108,.07),var(--panel) 40%);animation:overduePulse 2.4s ease-in-out infinite}
+.frow.overdue:hover{border-color:var(--red)}
+.frow.overdue-high{border-color:rgba(255,94,108,.8);animation:overduePulse 1.2s ease-in-out infinite}
+@keyframes overduePulse{0%,100%{box-shadow:0 0 0 0 rgba(255,94,108,0)}50%{box-shadow:0 0 0 3px rgba(255,94,108,.18)}}
+@media (prefers-reduced-motion:reduce){.frow.overdue,.frow.overdue-high{animation:none;box-shadow:0 0 0 2px rgba(255,94,108,.15)}}
 .chk{width:24px;height:24px;border-radius:50%;border:2px solid var(--line);flex:none;display:grid;place-items:center;color:transparent;transition:.15s}
 .frow:hover .chk{border-color:var(--green)}.frow.done .chk{background:var(--green);border-color:var(--green);color:#08160d}
 .frow .ftitle{flex:1;min-width:0;font-weight:600}.frow.done .ftitle{text-decoration:line-through}
