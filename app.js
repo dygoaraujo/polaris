@@ -51,6 +51,22 @@ function showLogin(onSuccess) {
   [userEl, passEl].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') attempt(); }));
 }
 
+function showGitPullReminder(onDone) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:1900;display:flex;align-items:center;justify-content:center;background:rgba(10,14,22,.7);backdrop-filter:blur(4px)';
+  wrap.innerHTML = `<div style="background:var(--panel);border:1px solid var(--line-soft);border-radius:18px;padding:32px 36px;max-width:380px;width:90%;display:flex;flex-direction:column;align-items:center;gap:0;text-align:center;box-shadow:0 20px 60px -10px rgba(0,0,0,.6)">
+    <div style="font-size:32px;margin-bottom:12px">🔄</div>
+    <div style="font-family:var(--display);font-weight:700;font-size:18px;margin-bottom:8px">Remember to git pull!</div>
+    <div style="color:var(--txt-dim);font-size:13.5px;line-height:1.6;margin-bottom:24px">If you made changes on another computer,<br>run <code style="background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:1px 7px;font-family:var(--mono);font-size:12px;color:var(--teal)">git pull</code> before continuing.</div>
+    <button id="gpr-done" style="width:100%;padding:11px;border-radius:10px;border:0;background:linear-gradient(180deg,#5b9bff,var(--accent-2));color:#fff;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer">✓ Already done / not needed</button>
+    <button id="gpr-skip" style="margin-top:10px;background:transparent;border:0;color:var(--txt-faint);font-size:12.5px;cursor:pointer;font-family:inherit">Skip reminder</button>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close = () => { wrap.style.opacity = '0'; wrap.style.transition = 'opacity .25s'; setTimeout(() => { wrap.remove(); onDone(); }, 260); };
+  wrap.querySelector('#gpr-done').onclick = close;
+  wrap.querySelector('#gpr-skip').onclick = close;
+}
+
 // ── Storage (localStorage + Gist sync) ──────────────────────────────────────
 const mem = {};
 const LS_PREFIX = 'polaris_';
@@ -1486,7 +1502,7 @@ document.getElementById('logoutBtn').onclick = () => { localStorage.removeItem(A
     await new Promise(resolve => showLogin(() => {
       document.querySelector('.layout').style.display = '';
       document.getElementById('fab').style.display = '';
-      resolve();
+      showGitPullReminder(resolve);
     }));
   }
   await gistLoad();
