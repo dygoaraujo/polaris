@@ -132,7 +132,7 @@ function scheduleGistSave() { clearTimeout(gistTimer); gistTimer = setTimeout(gi
 
 // ── State ────────────────────────────────────────────────────────────────────
 let tasks = [], vocab = [], ideas = [], settings = {}, mistakes = [];
-let current = 'today', filter = 'all', boardFilters = [], dashPeriod = 'month';
+let current = 'today', filter = 'all', boardFilters = [], dashPeriod = 'month', weekReportOffset = 0;
 let search = '', sortCol = 'createdAt', sortDir = -1, calY, calM, calSel = null;
 let addRowOpen = false;
 
@@ -789,8 +789,8 @@ function buildDonutSVG(data) {
   </div>`;
 }
 function buildWeeklyReport() {
-  const [wStart, wEnd] = weekRange(0);
-  const [nStart, nEnd] = weekRange(1);
+  const [wStart, wEnd] = weekRange(weekReportOffset);
+  const [nStart, nEnd] = weekRange(weekReportOffset + 1);
   const weekLabel = `${wStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(wEnd - DAY).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
   // Completed this week
@@ -829,8 +829,16 @@ function buildWeeklyReport() {
       ${rows.length ? rows.map(taskRow).join('') : `<div class="wr-empty">${emptyMsg}</div>`}
     </div>`;
 
+  const isCurrentWeek = weekReportOffset === 0;
   return `
-  <div class="dash-section-label">📊 Weekly Report · ${weekLabel}</div>
+  <div class="dash-section-label" style="justify-content:space-between">
+    <span style="display:flex;align-items:center;gap:11px;font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--txt-faint)">📊 Weekly Report</span>
+    <div style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--txt-dim)">
+      <button class="btn sm ghost" id="wr-prev" style="padding:3px 9px">‹ Prev</button>
+      <span style="min-width:180px;text-align:center;color:var(--txt-dim)">${weekLabel}${isCurrentWeek ? ' <span style="color:var(--accent);font-size:10px">current</span>' : ''}</span>
+      <button class="btn sm ghost" id="wr-next" style="padding:3px 9px" ${isCurrentWeek ? 'disabled style="opacity:.35;padding:3px 9px"' : ''}>Next ›</button>
+    </div>
+  </div>
   <div class="dash-mpanel" style="margin-bottom:40px">
     <div class="wr-stats-row">
       <div class="wr-stat"><span class="wr-stat-n" style="color:var(--green)">${completed.length}</span><span class="wr-stat-l">Completed</span></div>
@@ -1519,7 +1527,9 @@ document.addEventListener('click', e => {
   const f = e.target.closest('[data-f]'); if (f) { filter = f.dataset.f; renderFilters(); renderTable(); return; }
   const sq = e.target.closest('[data-sq]'); if (sq) { const [col, dir] = sq.dataset.sq.split(':'); sortCol = col; sortDir = parseInt(dir); renderFilters(); renderTable(); return; }
   const bf = e.target.closest('[data-bf]'); if (bf) { const k = bf.dataset.bf; if (k === 'all') { boardFilters = []; } else if (boardFilters.includes(k)) { boardFilters = boardFilters.filter(x => x !== k); } else { boardFilters.push(k); } renderBoard(); return; }
-  const dp = e.target.closest('[data-dp]'); if (dp) { dashPeriod = dp.dataset.dp; renderDashboard(); return; }
+  const dp = e.target.closest('[data-dp]'); if (dp) { dashPeriod = dp.dataset.dp; weekReportOffset = 0; renderDashboard(); return; }
+  if (e.target.id === 'wr-prev') { weekReportOffset--; renderDashboard(); return; }
+  if (e.target.id === 'wr-next' && weekReportOffset < 0) { weekReportOffset++; renderDashboard(); return; }
   const th = e.target.closest('th[data-sort]'); if (th) { const c = th.dataset.sort; if (sortCol === c) sortDir *= -1; else { sortCol = c; sortDir = 1; } renderTable(); return; }
   const star = e.target.closest('[data-star]'); if (star) { e.stopPropagation(); toggleFocus(star.dataset.star); return; }
   const td = e.target.closest('[data-toggle-done]'); if (td) { e.stopPropagation(); const t = getTask(td.dataset.toggleDone); const wasDone = t.status === 'done'; inlineEdit(td.dataset.toggleDone, 'status', wasDone ? 'in_progress' : 'done').then(() => { renderToday(); toast(wasDone ? 'Reopened' : 'Done ✓'); }); return; }
