@@ -788,6 +788,63 @@ function buildDonutSVG(data) {
     <div class="don-legend">${legend}</div>
   </div>`;
 }
+function buildWeeklyReport() {
+  const [wStart, wEnd] = weekRange(0);
+  const [nStart, nEnd] = weekRange(1);
+  const weekLabel = `${wStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(wEnd - DAY).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+  // Completed this week
+  const completed = tasks.filter(t => t.status === 'done' && t.completedAt && (() => { const d = new Date(t.completedAt); return d >= wStart && d < wEnd; })())
+    .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+
+  // Still open but due this week (not done)
+  const openThisWeek = tasks.filter(t => t.status !== 'done' && t.deadline && (() => { const d = parseDate(t.deadline); return d >= wStart && d < wEnd; })())
+    .sort((a, b) => { const o = { urgent: 0, high: 1, medium: 2, low: 3 }; return o[a.priority] - o[b.priority]; });
+
+  // Overdue (past deadline, not done)
+  const overdue = tasks.filter(t => t.status !== 'done' && relDays(t.deadline) !== null && relDays(t.deadline) < 0)
+    .sort((a, b) => relDays(a.deadline) - relDays(b.deadline));
+
+  // Next week priorities
+  const nextWeek = tasks.filter(t => t.status !== 'done' && t.deadline && (() => { const d = parseDate(t.deadline); return d >= nStart && d < nEnd; })())
+    .sort((a, b) => { const o = { urgent: 0, high: 1, medium: 2, low: 3 }; return o[a.priority] - o[b.priority]; });
+
+  // Hours this week
+  const hoursWeek = tasks.filter(t => t.completedAt && (() => { const d = new Date(t.completedAt); return d >= wStart && d < wEnd; })())
+    .reduce((s, t) => s + (+t.hours || 0), 0);
+
+  const taskRow = t => `<div class="wr-row" data-open="${t.id}">
+    <span class="prio-bar prio-${t.priority}" style="height:18px;flex:none"></span>
+    <span class="wr-title">${esc(t.title)}</span>
+    ${t.product ? `<span class="tag" style="font-size:11px;padding:1px 7px">${esc(t.product)}</span>` : ''}
+    <span class="prio-tag prio-${t.priority}" style="margin-left:auto;flex:none">${PRIOS[t.priority]}</span>
+  </div>`;
+
+  const section = (emoji, title, count, color, rows, emptyMsg) => `
+    <div class="wr-section">
+      <div class="wr-section-head">
+        <span>${emoji} ${title}</span>
+        <span class="wr-count" style="color:${color}">${count}</span>
+      </div>
+      ${rows.length ? rows.map(taskRow).join('') : `<div class="wr-empty">${emptyMsg}</div>`}
+    </div>`;
+
+  return `
+  <div class="dash-section-label">📊 Weekly Report · ${weekLabel}</div>
+  <div class="dash-mpanel" style="margin-bottom:40px">
+    <div class="wr-stats-row">
+      <div class="wr-stat"><span class="wr-stat-n" style="color:var(--green)">${completed.length}</span><span class="wr-stat-l">Completed</span></div>
+      <div class="wr-stat"><span class="wr-stat-n" style="color:var(--amber)">${openThisWeek.length}</span><span class="wr-stat-l">Still open</span></div>
+      <div class="wr-stat"><span class="wr-stat-n" style="color:var(--red)">${overdue.length}</span><span class="wr-stat-l">Overdue</span></div>
+      <div class="wr-stat"><span class="wr-stat-n" style="color:var(--blue)">${nextWeek.length}</span><span class="wr-stat-l">Due next week</span></div>
+      <div class="wr-stat"><span class="wr-stat-n" style="color:var(--teal)">${hoursWeek}h</span><span class="wr-stat-l">Hours logged</span></div>
+    </div>
+    ${section('✅', 'Accomplished this week', completed.length, 'var(--green)', completed, 'Nothing completed yet — keep going!')}
+    ${openThisWeek.length ? section('⏳', 'Still open this week', openThisWeek.length, 'var(--amber)', openThisWeek, '') : ''}
+    ${overdue.length ? section('🔴', 'Overdue', overdue.length, 'var(--red)', overdue, '') : ''}
+    ${section('🎯', 'Priorities for next week', nextWeek.length, 'var(--blue)', nextWeek, 'Nothing scheduled yet for next week.')}
+  </div>`;
+}
 function renderDashboard() {
   const DPDS = [{ k: 'today', l: 'Today' }, { k: 'week', l: 'This Week' }, { k: 'month', l: 'This Month' }, { k: 'quarter', l: 'This Quarter' }, { k: 'year', l: 'This Year' }, { k: 'total', l: 'All Time' }];
   const range = dashRange(dashPeriod);
@@ -947,13 +1004,15 @@ function renderDashboard() {
   </div>
 
   <div class="dash-section-label">📋 Activity Summary · ${periodLabel}</div>
-  <div class="dash-mpanel" style="margin-bottom:40px">
+  <div class="dash-mpanel" style="margin-bottom:${dashPeriod === 'week' ? '20px' : '40px'}">
     <div class="ws-head"><span>Completed Tasks</span><span class="ws-count">${summaryTasks.length} completed ${periodLabel}</span></div>
     ${summaryTasks.length
       ? `<table class="ws-tbl"><thead><tr><th>Activity</th><th>Product</th><th>Sector</th><th>Priority</th><th>Completed</th></tr></thead><tbody>${summaryTasks.map(t => `<tr data-open="${t.id}" style="cursor:pointer"><td class="ws-title">${esc(t.title)}</td><td>${t.product ? `<span class="tag">${esc(t.product)}</span>` : '<span style="color:var(--txt-faint)">—</span>'}</td><td style="font-size:12px;color:var(--txt-dim)">${esc(t.sector) || '—'}</td><td><span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span></td><td style="color:var(--green);font-family:var(--mono);font-size:11.5px">${fmtDate(t.completedAt.slice(0, 10))}</td></tr>`).join('')}</tbody></table>`
       : `<div style="color:var(--txt-faint);font-size:13.5px;padding:12px 0">No completed tasks ${periodLabel}. Keep pushing! 🚀</div>`
     }
-  </div>`;
+  </div>
+  ${dashPeriod === 'week' ? buildWeeklyReport() : ''}
+  `;
 }
 
 // ── SUPPLIER HUB ──────────────────────────────────────────────────────────────
