@@ -506,17 +506,47 @@ function openModal(task) {
     const box = document.getElementById('tutorBox');
     if (!text) { box.innerHTML = `<div class="tutor">Type your task in English first, then I'll check it.</div>`; return; }
     box.innerHTML = `<div class="tutor"><span class="spin"></span> Checking your English…</div>`;
-    const sys = `You are an English tutor for a Brazilian mechanical/industrial engineer who writes task descriptions in English to practice. Check grammar, word choice and natural phrasing in a professional engineering register. Reply ONLY with strict JSON, no markdown:\n{"ok":boolean,"corrected":"corrected full text","notes":[{"issue":"short label","why":"one-sentence rule explanation in English"}]}\nIf already correct: ok=true, corrected=same text, notes=[].`;
-    try {
-      const out = await callTutor(sys, text);
-      const data = JSON.parse(out.replace(/```json|```/g, '').trim());
-      if (data.ok && (!data.notes || !data.notes.length)) box.innerHTML = `<div class="tutor good"><div class="ttl">✓ Looks good</div>Reads naturally. Nice work.</div>`;
-      else {
-        box.innerHTML = `<div class="tutor"><div class="ttl">🌐 Tutor feedback</div><div class="fix"><b>Suggested:</b> ${esc(data.corrected)} <button class="btn sm" style="margin-left:8px;padding:3px 9px" id="applyFix">Use this</button></div>${data.notes && data.notes.length ? '<ul>' + data.notes.map(n => `<li><b>${esc(n.issue)}:</b> ${esc(n.why)}</li>`).join('') + '</ul>' : ''}</div>`;
-        const af = document.getElementById('applyFix'); if (af) af.onclick = () => { document.getElementById('f-title').value = data.corrected.split('. ')[0].replace(/\.$/, ''); if (desc) document.getElementById('f-desc').value = data.corrected; };
-        logMistake(text, data.corrected, data.notes, t.id);
+    let data;
+    try { data = await callWorker(text); }
+    catch(e) { box.innerHTML = `<div class="tutor">Couldn't reach the tutor right now — you can still save the task.</div>`; return; }
+
+    // Log mistake + absorb terms regardless of ok status
+    await logMistake(text, data.corrected, data.errors, data.terms, t.id);
+    const newTerms = await absorbTerms(data.terms);
+
+    if (data.ok && (!data.errors || !data.errors.length)) {
+      const termsHTML = data.terms && data.terms.length
+        ? `<div class="tutor-terms"><div class="tutor-terms-h">📖 Terms captured (${data.terms.length} added to Vocabulary)</div>${data.terms.map(tm => `<div class="tutor-term"><span class="tt-en">${esc(tm.en)}</span><span class="tt-pt">${esc(tm.pt)}</span></div>`).join('')}</div>` : '';
+      box.innerHTML = `<div class="tutor good"><div class="ttl">✓ Looks good</div>Reads naturally. Nice work.${termsHTML}</div>`;
+      return;
+    }
+
+    const errorsHTML = (data.errors || []).length
+      ? `<div class="tutor-errors"><div class="tutor-errors-h">⚠️ Erros encontrados</div>${data.errors.map(e => `<div class="tutor-err-row"><span class="te-wrong">${esc(e.errado)}</span><span class="te-arrow">→</span><span class="te-right">${esc(e.certo)}</span><span class="te-cat">${esc(e.categoria)}</span><div class="te-rule">${esc(e.regra)}</div></div>`).join('')}</div>` : '';
+    const termsHTML = (data.terms || []).length
+      ? `<div class="tutor-terms"><div class="tutor-terms-h">📖 Termos capturados${newTerms ? ` (${newTerms} adicionado${newTerms > 1 ? 's' : ''} ao Vocabulário)` : ''}</div>${data.terms.map(tm => `<div class="tutor-term"><span class="tt-en">${esc(tm.en)}</span><span class="tt-pt">${esc(tm.pt)}</span></div>`).join('')}</div>` : '';
+
+    box.innerHTML = `<div class="tutor">
+      <div class="tutor-fix">
+        <div class="ttl">🌐 Versão corrigida</div>
+        <div class="fix-text">${esc(data.corrected)}</div>
+        <button class="btn sm primary" id="applyFix">Usar esta versão na tarefa</button>
+      </div>
+      ${errorsHTML}${termsHTML}
+    </div>`;
+
+    document.getElementById('applyFix').onclick = () => {
+      const c = data.corrected;
+      if (desc) {
+        const i = c.indexOf('. ');
+        if (i > -1) { document.getElementById('f-title').value = c.slice(0, i).replace(/\.$/, ''); document.getElementById('f-desc').value = c.slice(i + 2); }
+        else document.getElementById('f-title').value = c;
+      } else {
+        document.getElementById('f-title').value = c.replace(/\.$/, '');
       }
-    } catch(e) { box.innerHTML = e.message === 'NO_KEY' ? `<div class="tutor">Add a Gemini API key in Settings to turn on the English tutor.</div>` : `<div class="tutor">Couldn't reach the tutor right now — you can still save the task.</div>`; }
+      document.getElementById('applyFix').textContent = '✓ Aplicado';
+      document.getElementById('applyFix').disabled = true;
+    };
   }
 
   const commitSave = async () => {
@@ -532,64 +562,72 @@ function openModal(task) {
   document.getElementById('mSave').onclick = async () => {
     const title = document.getElementById('f-title').value.trim(), desc = document.getElementById('f-desc').value.trim();
     const text = (title + (desc ? '. ' + desc : '')).trim();
-    // Pre-save English check (only for new tasks, when the tutor is on)
-    if (t.id || !hasApiKey() || !text) return commitSave();
+    if (t.id || !text) return commitSave(); // skip check on edits or empty
     const box = document.getElementById('tutorBox');
-    box.innerHTML = `<div class="tutor"><span class="spin"></span> Checking your English before saving…</div>`;
-    const sys = `You are an English tutor for a Brazilian mechanical/industrial engineer. Check grammar, word choice and natural phrasing in a professional engineering register. Reply ONLY strict JSON, no markdown:\n{"ok":boolean,"corrected":"corrected full text","notes":[{"issue":"short error category like 'article','verb tense','preposition','word choice','plural','word order'","why":"one-sentence rule in English"}]}\nIf already correct: ok=true, corrected=same text, notes=[].`;
+    box.innerHTML = `<div class="tutor"><span class="spin"></span> Verificando o inglês antes de salvar…</div>`;
     let data;
-    try { data = JSON.parse((await callTutor(sys, text)).replace(/```json|```/g, '').trim()); }
-    catch(e) { box.innerHTML = `<div class="tutor">Couldn't reach the tutor — saving as written.</div>`; return commitSave(); }
-    if (data.ok && (!data.notes || !data.notes.length)) { box.innerHTML = `<div class="tutor good"><div class="ttl">✓ Looks good</div>Saving…</div>`; return commitSave(); }
-    // Errors found — log them and let the user decide
-    logMistake(text, data.corrected, data.notes, t.id || null);
+    try { data = await callWorker(text); }
+    catch(e) { box.innerHTML = `<div class="tutor">Não consegui checar agora — salvando como está.</div>`; return commitSave(); }
+    await logMistake(text, data.corrected, data.errors, data.terms, null);
+    await absorbTerms(data.terms);
+    if (data.ok && (!data.errors || !data.errors.length)) {
+      box.innerHTML = `<div class="tutor good"><div class="ttl">✓ Looks good</div>Salvando…</div>`;
+      return commitSave();
+    }
     const applyCorrection = () => { const c = data.corrected; if (desc) { const i = c.indexOf('. '); if (i > -1) { document.getElementById('f-title').value = c.slice(0, i).replace(/\.$/, ''); document.getElementById('f-desc').value = c.slice(i + 2); } else { document.getElementById('f-title').value = c; } } else { document.getElementById('f-title').value = c.replace(/\.$/, ''); } };
-    box.innerHTML = `<div class="tutor"><div class="ttl">🌐 Before you save — let's fix this</div><div class="fix"><b>Suggested:</b> ${esc(data.corrected)}</div>${data.notes.length ? '<ul>' + data.notes.map(n => `<li><b>${esc(n.issue)}:</b> ${esc(n.why)}</li>`).join('') + '</ul>' : ''}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn sm primary" id="useFixSave">✓ Use correction & save</button><button class="btn sm" id="saveAnyway">Save as I wrote it</button></div></div>`;
+    const errList = (data.errors || []).map(e => `<div class="tutor-err-row"><span class="te-wrong">${esc(e.errado)}</span><span class="te-arrow">→</span><span class="te-right">${esc(e.certo)}</span><span class="te-cat">${esc(e.categoria)}</span><div class="te-rule">${esc(e.regra)}</div></div>`).join('');
+    box.innerHTML = `<div class="tutor">
+      <div class="tutor-fix">
+        <div class="ttl">🌐 Antes de salvar — versão corrigida</div>
+        <div class="fix-text">${esc(data.corrected)}</div>
+      </div>
+      ${errList ? `<div class="tutor-errors">${errList}</div>` : ''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+        <button class="btn sm primary" id="useFixSave">✓ Usar correção e salvar</button>
+        <button class="btn sm" id="saveAnyway">Salvar como escrevi</button>
+      </div>
+    </div>`;
     document.getElementById('useFixSave').onclick = () => { applyCorrection(); commitSave(); };
     document.getElementById('saveAnyway').onclick = () => commitSave();
   };
 }
 
-// ── AI API ────────────────────────────────────────────────────────────────────
-function getApiKey() { try { return localStorage.getItem('polaris_api_key') || ''; } catch(e) { return ''; } }
-function getGeminiKey() { try { return localStorage.getItem('polaris_gemini_key') || ''; } catch(e) { return ''; } }
-function hasApiKey() { return !!(getGeminiKey() || getApiKey()); }
-async function callGemini(system, userText) {
-  const key = getGeminiKey();
-  if (!key) throw new Error("NO_KEY");
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ parts: [{ text: userText }] }], generationConfig: { maxOutputTokens: 1000 } }) });
-  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error("API " + res.status + (err.error?.message ? ': ' + err.error.message : '')); }
-  const data = await res.json();
-  return data.candidates[0].content.parts[0].text.trim();
-}
-async function callClaude(system, userText, maxTokens = 1000) {
-  const key = getApiKey();
-  if (!key) throw new Error("NO_KEY");
-  const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, body: JSON.stringify({ model: "claude-haiku-4-5", max_tokens: maxTokens, system, messages: [{ role: "user", content: userText }] }) });
-  if (!res.ok) throw new Error("API " + res.status);
-  const data = await res.json();
-  return data.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
-}
-async function callTutor(system, userText) {
-  if (getGeminiKey()) return callGemini(system, userText);
-  return callClaude(system, userText);
-}
-// Background correction fired when a new task is saved (silent if no API key)
-async function autoCorrect(text, taskId) {
-  if (!hasApiKey() || !text) return;
-  const sys = `You are an English tutor for a Brazilian mechanical/industrial engineer who writes task descriptions in English to practice. Check grammar, word choice and natural phrasing in a professional engineering register. Reply ONLY with strict JSON, no markdown:\n{"ok":boolean,"corrected":"corrected full text","notes":[{"issue":"short error category like 'article','verb tense','preposition','word choice','plural','word order'","why":"one-sentence rule explanation in English"}]}\nIf already correct: ok=true, corrected=same text, notes=[].`;
-  try {
-    const out = await callTutor(sys, text);
-    const data = JSON.parse(out.replace(/```json|```/g, '').trim());
-    if (data.notes && data.notes.length) { await logMistake(text, data.corrected, data.notes, taskId); toast(`📝 ${data.notes.length} English note${data.notes.length > 1 ? 's' : ''} logged — see Vocabulary`); if (current === 'vocab') renderVocab(); }
-  } catch(e) {}
+// ── AI API (proxied through Cloudflare Worker — key never on client) ───────────
+const WORKER_URL = 'https://polaris-ai.rodrigoaportob.workers.dev';
+function hasApiKey() { return true; } // Worker is always available
+async function callWorker(text) {
+  const res = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text })
+  });
+  if (!res.ok) throw new Error('WORKER_' + res.status);
+  return res.json(); // returns { ok, corrected, errors, terms }
 }
 // Records a correction into the persistent mistakes journal
-async function logMistake(original, corrected, notes, taskId) {
-  if (!notes || !notes.length) return;
-  mistakes.unshift({ id: uid(), original, corrected, errors: notes.map(n => ({ type: (n.issue || 'other').toLowerCase().trim(), explanation: n.why || '' })), at: new Date().toISOString(), taskId: taskId || null });
+async function logMistake(original, corrected, errors, terms, taskId) {
+  if ((!errors || !errors.length) && (!terms || !terms.length)) return;
+  mistakes.unshift({
+    id: uid(), original, corrected, at: new Date().toISOString(), taskId: taskId || null,
+    errors: (errors || []).map(e => ({ type: (e.categoria || 'outro').toLowerCase().trim(), explanation: e.regra || '' })),
+    corrections: errors || [],
+    terms: terms || []
+  });
   if (mistakes.length > 500) mistakes = mistakes.slice(0, 500);
   await sset('mistakes', mistakes);
+}
+// Auto-adds new terms from a correction to the vocab deck
+async function absorbTerms(terms) {
+  if (!terms || !terms.length) return 0;
+  let added = 0;
+  terms.forEach(tm => {
+    if (!tm.en) return;
+    if (vocab.some(v => v.term.toLowerCase() === tm.en.toLowerCase())) return;
+    const card = { id: uid(), term: tm.en, translation: tm.pt || '', example: tm.example || '', kind: 'expression', status: 'new', addedAt: new Date().toISOString() };
+    srsInit(card); vocab.unshift(card); added++;
+  });
+  if (added) await saveVocab();
+  return added;
 }
 
 // ── VOCAB ─────────────────────────────────────────────────────────────────────
@@ -636,33 +674,58 @@ function renderEnStats() {
 function renderMistakes() {
   const el = document.getElementById('mistakesPanel'); if (!el) return;
   if (!mistakes.length) {
-    el.innerHTML = `<h3 class="en-h">⚠️ Your recurring mistakes</h3><div class="empty"><div>${hasApiKey() ? 'No corrections yet — create a task in English and the tutor will log what to fix here.' : 'Add a Gemini API key in Settings to auto-log your mistakes as you create tasks in English.'}</div></div>`;
+    el.innerHTML = `<h3 class="en-h">⚠️ Seus erros recorrentes</h3><div class="empty"><div>Nenhuma correção ainda — crie uma tarefa em inglês e o tutor vai registrar o que corrigir aqui.</div></div>`;
     return;
   }
   const counts = {}; mistakes.forEach(m => (m.errors || []).forEach(e => { (counts[e.type] = counts[e.type] || { n: 0, ex: e.explanation }).n++; }));
   const ranked = Object.entries(counts).sort((a, b) => b[1].n - a[1].n);
   const chips = ranked.map(([type, d]) => `<div class="miss-chip" title="${esc(d.ex)}"><b>${esc(type)}</b><span>${d.n}</span></div>`).join('');
-  const recent = mistakes.slice(0, 6).map(m => `<div class="miss-row"><div class="miss-orig">${esc(m.original)}</div><div class="miss-corr">→ ${esc(m.corrected)}</div>${(m.errors || []).length ? `<div class="miss-tags">${m.errors.map(e => `<span class="miss-tag">${esc(e.type)}</span>`).join('')}</div>` : ''}</div>`).join('');
-  el.innerHTML = `<h3 class="en-h">⚠️ Your recurring mistakes <button class="btn sm" id="clearMiss" style="margin-left:auto;font-size:11px">Clear log</button></h3>
-    <div class="miss-chips">${chips}</div>
-    <div class="miss-recent-h">Recent corrections</div>
-    <div class="miss-list">${recent}</div>`;
-  const cb = document.getElementById('clearMiss'); if (cb) cb.onclick = async () => { if (await customConfirm('Clear all logged corrections?\nYour vocabulary deck stays.', { yes: 'Clear', no: 'Cancel', danger: true })) { mistakes = []; await sset('mistakes', mistakes); renderVocab(); toast('Corrections cleared'); } };
+  const recent = mistakes.slice(0, 8).map(m => {
+    const corrList = (m.corrections || []).map(e => `<div class="tutor-err-row"><span class="te-wrong">${esc(e.errado)}</span><span class="te-arrow">→</span><span class="te-right">${esc(e.certo)}</span><span class="te-cat">${esc(e.categoria)}</span><div class="te-rule">${esc(e.regra)}</div></div>`).join('');
+    return `<div class="miss-row"><div class="miss-orig">${esc(m.original)}</div><div class="miss-corr">→ ${esc(m.corrected)}</div>${corrList || (m.errors||[]).map(e=>`<span class="miss-tag">${esc(e.type)}</span>`).join('')}</div>`;
+  }).join('');
+  el.innerHTML = `<h3 class="en-h">⚠️ Seus erros recorrentes
+    <div style="display:flex;gap:8px;margin-left:auto">
+      <button class="btn sm" id="exportHub" style="font-size:11px">⬇ Exportar pro English Hub</button>
+      <button class="btn sm" id="clearMiss" style="font-size:11px">Limpar log</button>
+    </div>
+  </h3>
+  <div class="miss-chips">${chips}</div>
+  <div class="miss-recent-h">Correções recentes</div>
+  <div class="miss-list">${recent}</div>`;
+  document.getElementById('clearMiss').onclick = async () => { if (await customConfirm('Limpar todas as correções?\nSeu vocabulário fica.', { yes: 'Limpar', no: 'Cancelar', danger: true })) { mistakes = []; await sset('mistakes', mistakes); renderVocab(); toast('Correções limpas'); } };
+  document.getElementById('exportHub').onclick = () => exportToEnglishHub();
+}
+
+function exportToEnglishHub() {
+  const today = new Date().toISOString().slice(0, 10);
+  const itens = [];
+  mistakes.forEach(m => {
+    (m.corrections || []).forEach(e => {
+      itens.push({ tipo: 'correcao', errado: e.errado || '', certo: e.certo || '', categoria: e.categoria || 'outro', regra: e.regra || '', origem_pessoa: 'minha' });
+    });
+    (m.terms || []).forEach(tm => {
+      if (!itens.some(i => i.tipo === 'vocabulario' && i.en === tm.en))
+        itens.push({ tipo: 'vocabulario', en: tm.en || '', pt: tm.pt || '', tags: ['engenharia'] });
+    });
+  });
+  const payload = {
+    fonte: { tipo_input: 'polaris', tema: 'Engenharia', data: today, origem: `polaris-${today}` },
+    itens,
+    padroes: []
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `polaris-english-hub-${today}.json`; a.click();
+  toast(`${itens.length} itens exportados ✓`);
 }
 async function mineVocab() {
-  if (!hasApiKey()) { toast('Add a Gemini or Claude API key in Settings to mine vocabulary'); return; }
-  const corpus = tasks.map(t => `${t.title}. ${t.description}`).join('\n').trim();
-  if (!corpus) { toast('Add some tasks in English first'); return; }
-  const existing = vocab.map(v => v.term.toLowerCase());
+  // Mine terms already captured in correction history that aren't in vocab yet
   const btn = document.getElementById('mineBtn'); btn.innerHTML = `<span class="spin"></span> Mining…`; btn.disabled = true;
-  const sys = `You extract technical English worth studying from task notes by a Brazilian mechanical/industrial engineer learning English. PRIORITIZE multi-word expressions and collocations engineers actually say (e.g. "lead time", "bill of materials", "tighten the tolerance", "sign-off from", "lead time with the supplier") over isolated single words — these teach how English is really built. Only include a single word if it's genuinely useful technical vocabulary. Skip trivial words. For each item give: the English expression/word, a natural Brazilian Portuguese translation, a short natural English example sentence, and kind ("expression" for multi-word collocations, "word" for single words). Reply ONLY strict JSON:\n{"terms":[{"term":"...","translation":"...","example":"...","kind":"expression|word"}]}\nMax 12 items, favoring expressions. Exclude already-known: ${existing.join(', ') || '(none)'}.`;
-  try {
-    const out = await callTutor(sys, corpus);
-    const data = JSON.parse(out.replace(/```json|```/g, '').trim());
-    let added = 0;
-    (data.terms || []).forEach(tm => { if (!tm.term) return; if (vocab.some(v => v.term.toLowerCase() === tm.term.toLowerCase())) return; const card = { id: uid(), term: tm.term, translation: tm.translation || '', example: tm.example || '', kind: tm.kind === 'expression' ? 'expression' : 'word', status: 'new', addedAt: new Date().toISOString() }; srsInit(card); vocab.unshift(card); added++; });
-    await saveVocab(); refreshAll(); toast(added ? `${added} new item${added > 1 ? 's' : ''} added 📖` : 'No new items found');
-  } catch(e) { toast(e.message === 'NO_KEY' ? 'Add an API key in Settings first' : 'Mining failed — try again'); }
+  const allTerms = [];
+  mistakes.forEach(m => (m.terms || []).forEach(tm => { if (tm.en && !allTerms.some(x => x.en.toLowerCase() === tm.en.toLowerCase())) allTerms.push(tm); }));
+  const added = await absorbTerms(allTerms);
+  if (added) { refreshAll(); toast(`${added} novo${added > 1 ? 's' : ''} termo${added > 1 ? 's' : ''} adicionado${added > 1 ? 's' : ''} 📖`); }
+  else toast('Nenhum termo novo — use o tutor em mais tarefas primeiro.');
   btn.innerHTML = `⛏️ Mine vocabulary`; btn.disabled = false;
 }
 let fcOn = false, revQueue = [], revFlip = false, revDoneCount = 0;
@@ -1425,9 +1488,6 @@ function renderSettings() {
     return `<div class="set-panel"><h4>${title}</h4><div class="sd">${desc}</div><div class="pills">${pills || '<span style="color:var(--txt-faint);font-size:13px">None yet.</span>'}</div><div class="addline"><input id="add-${field}" placeholder="Add new…"><button class="btn sm primary" data-add="${field}">Add</button></div></div>`;
   };
   let storedToken = ''; try { storedToken = localStorage.getItem('polaris_gh_token') || ''; } catch(e) {}
-  let storedKey = ''; try { storedKey = localStorage.getItem('polaris_api_key') || ''; } catch(e) {}
-  let storedGemini = ''; try { storedGemini = localStorage.getItem('polaris_gemini_key') || ''; } catch(e) {}
-  const tutorOn = storedGemini || storedKey;
   document.getElementById('settingsBody').innerHTML = `<div class="set-grid">
     <div class="set-panel"><h4>Your name</h4><div class="sd">Used in the "Good morning" greeting on Today.</div><div class="addline"><input id="set-name" value="${esc(settings.name || '')}" placeholder="Your name"><button class="btn sm primary" id="saveName">Save</button></div></div>
     ${listPanel('Activity types', 'e.g. Project document, Mechanical test, Supplier dealing.', 'types')}
@@ -1442,11 +1502,8 @@ function renderSettings() {
     <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn sm" id="syncNow">↑ Sync now</button><button class="btn sm" id="loadCloud">↓ Load from cloud</button></div>
   </div>
   <div class="set-panel" style="margin-top:14px">
-    <h4>🌐 English tutor — AI correction ${tutorOn ? '<span style="color:var(--green);font-size:12px">● ON</span>' : '<span style="color:var(--txt-faint);font-size:12px">○ off</span>'}</h4>
-    <div class="sd">Paste a Gemini API key (recommended — free tier, 1500 req/day at aistudio.google.com) to enable automatic English correction and vocabulary mining. Stored only on this device, never synced to the cloud.</div>
-    <div class="addline" style="margin-bottom:10px"><input id="set-gemini" type="password" placeholder="Gemini API key  AIza…" value="${storedGemini}"><button class="btn sm primary" id="saveGemini">Save key</button></div>
-    <div class="sd" style="margin-top:6px">Or use an Anthropic Claude key as fallback:</div>
-    <div class="addline" style="margin-bottom:6px"><input id="set-apikey" type="password" placeholder="Anthropic API key  sk-ant-…" value="${storedKey}"><button class="btn sm primary" id="saveApiKey">Save key</button></div>
+    <h4>🌐 English tutor — <span style="color:var(--green);font-size:12px">● ON</span></h4>
+    <div class="sd">Correção de inglês ativa via Cloudflare Worker. A chave da API fica segura no servidor — nenhum dado sensível no cliente.</div>
   </div>
   <div class="set-panel" style="margin-top:14px">
     <h4>Data</h4>
@@ -1472,8 +1529,6 @@ function renderSettings() {
   document.getElementById('saveToken').onclick = () => { const v = document.getElementById('set-token').value.trim(); if (!v) { toast('Paste your GitHub token first'); return; } try { localStorage.setItem('polaris_gh_token', v); } catch(e) {} toast('Token saved ✓ — syncing…'); gistSave(); };
   document.getElementById('syncNow').onclick = () => gistSave();
   document.getElementById('loadCloud').onclick = async () => { const ok = await gistLoad(); if (ok) { tasks = lsGet('tasks') || tasks; vocab = lsGet('vocab') || vocab; ideas = lsGet('ideas') || ideas; mistakes = lsGet('mistakes') || mistakes; const s = lsGet('settings'); if (s) settings = { ...DEFAULTS, ...s }; refreshAll(); toast('Loaded from cloud ✓'); } else toast('Nothing loaded — check your token'); };
-  const saveGeminiBtn = document.getElementById('saveGemini'); if (saveGeminiBtn) saveGeminiBtn.onclick = () => { const v = document.getElementById('set-gemini').value.trim(); try { localStorage.setItem('polaris_gemini_key', v); } catch(e) {} toast(v ? 'Gemini key saved ✓ — English tutor is ON' : 'Gemini key cleared'); renderSettings(); };
-  const saveKeyBtn = document.getElementById('saveApiKey'); if (saveKeyBtn) saveKeyBtn.onclick = () => { const v = document.getElementById('set-apikey').value.trim(); try { localStorage.setItem('polaris_api_key', v); } catch(e) {} toast(v ? 'Claude API key saved ✓' : 'Claude API key cleared'); renderSettings(); };
 }
 
 // ── EXPORT / IMPORT ───────────────────────────────────────────────────────────
