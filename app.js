@@ -508,7 +508,7 @@ function openModal(task) {
     box.innerHTML = `<div class="tutor"><span class="spin"></span> Checking your English…</div>`;
     let data;
     try { data = await callWorker(text); }
-    catch(e) { box.innerHTML = `<div class="tutor">Couldn't reach the tutor right now — you can still save the task.</div>`; return; }
+    catch(e) { box.innerHTML = `<div class="tutor">Erro: ${e.message} — abra o DevTools (F12 → Console) e me manda o erro vermelho.</div>`; return; }
 
     // Log mistake + absorb terms regardless of ok status
     await logMistake(text, data.corrected, data.errors, data.terms, t.id);
