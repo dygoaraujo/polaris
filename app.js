@@ -601,8 +601,11 @@ async function callWorker(text) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text })
   });
-  if (!res.ok) throw new Error('WORKER_' + res.status);
-  return res.json(); // returns { ok, corrected, errors, terms }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(`${res.status}: ${body.error || '?'} — ${body.detail || ''}`);
+  }
+  return res.json();
 }
 // Records a correction into the persistent mistakes journal
 async function logMistake(original, corrected, errors, terms, taskId) {
