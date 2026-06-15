@@ -508,7 +508,7 @@ function openModal(task) {
     box.innerHTML = `<div class="tutor"><span class="spin"></span> Checking your English…</div>`;
     const sys = `You are an English tutor for a Brazilian mechanical/industrial engineer who writes task descriptions in English to practice. Check grammar, word choice and natural phrasing in a professional engineering register. Reply ONLY with strict JSON, no markdown:\n{"ok":boolean,"corrected":"corrected full text","notes":[{"issue":"short label","why":"one-sentence rule explanation in English"}]}\nIf already correct: ok=true, corrected=same text, notes=[].`;
     try {
-      const out = await callClaude(sys, text);
+      const out = await callTutor(sys, text);
       const data = JSON.parse(out.replace(/```json|```/g, '').trim());
       if (data.ok && (!data.notes || !data.notes.length)) box.innerHTML = `<div class="tutor good"><div class="ttl">✓ Looks good</div>Reads naturally. Nice work.</div>`;
       else {
@@ -516,7 +516,7 @@ function openModal(task) {
         const af = document.getElementById('applyFix'); if (af) af.onclick = () => { document.getElementById('f-title').value = data.corrected.split('. ')[0].replace(/\.$/, ''); if (desc) document.getElementById('f-desc').value = data.corrected; };
         logMistake(text, data.corrected, data.notes, t.id);
       }
-    } catch(e) { box.innerHTML = e.message === 'NO_KEY' ? `<div class="tutor">Add an Anthropic API key in Settings to turn on the English tutor.</div>` : `<div class="tutor">Couldn't reach the tutor right now — you can still save the task.</div>`; }
+    } catch(e) { box.innerHTML = e.message === 'NO_KEY' ? `<div class="tutor">Add a Gemini API key in Settings to turn on the English tutor.</div>` : `<div class="tutor">Couldn't reach the tutor right now — you can still save the task.</div>`; }
   }
 
   const commitSave = async () => {
@@ -538,7 +538,7 @@ function openModal(task) {
     box.innerHTML = `<div class="tutor"><span class="spin"></span> Checking your English before saving…</div>`;
     const sys = `You are an English tutor for a Brazilian mechanical/industrial engineer. Check grammar, word choice and natural phrasing in a professional engineering register. Reply ONLY strict JSON, no markdown:\n{"ok":boolean,"corrected":"corrected full text","notes":[{"issue":"short error category like 'article','verb tense','preposition','word choice','plural','word order'","why":"one-sentence rule in English"}]}\nIf already correct: ok=true, corrected=same text, notes=[].`;
     let data;
-    try { data = JSON.parse((await callClaude(sys, text)).replace(/```json|```/g, '').trim()); }
+    try { data = JSON.parse((await callTutor(sys, text)).replace(/```json|```/g, '').trim()); }
     catch(e) { box.innerHTML = `<div class="tutor">Couldn't reach the tutor — saving as written.</div>`; return commitSave(); }
     if (data.ok && (!data.notes || !data.notes.length)) { box.innerHTML = `<div class="tutor good"><div class="ttl">✓ Looks good</div>Saving…</div>`; return commitSave(); }
     // Errors found — log them and let the user decide
@@ -550,9 +550,18 @@ function openModal(task) {
   };
 }
 
-// ── CLAUDE API ────────────────────────────────────────────────────────────────
+// ── AI API ────────────────────────────────────────────────────────────────────
 function getApiKey() { try { return localStorage.getItem('polaris_api_key') || ''; } catch(e) { return ''; } }
-function hasApiKey() { return !!getApiKey(); }
+function getGeminiKey() { try { return localStorage.getItem('polaris_gemini_key') || ''; } catch(e) { return ''; } }
+function hasApiKey() { return !!(getGeminiKey() || getApiKey()); }
+async function callGemini(system, userText) {
+  const key = getGeminiKey();
+  if (!key) throw new Error("NO_KEY");
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ parts: [{ text: userText }] }], generationConfig: { maxOutputTokens: 1000 } }) });
+  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error("API " + res.status + (err.error?.message ? ': ' + err.error.message : '')); }
+  const data = await res.json();
+  return data.candidates[0].content.parts[0].text.trim();
+}
 async function callClaude(system, userText, maxTokens = 1000) {
   const key = getApiKey();
   if (!key) throw new Error("NO_KEY");
@@ -561,12 +570,16 @@ async function callClaude(system, userText, maxTokens = 1000) {
   const data = await res.json();
   return data.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
 }
+async function callTutor(system, userText) {
+  if (getGeminiKey()) return callGemini(system, userText);
+  return callClaude(system, userText);
+}
 // Background correction fired when a new task is saved (silent if no API key)
 async function autoCorrect(text, taskId) {
   if (!hasApiKey() || !text) return;
   const sys = `You are an English tutor for a Brazilian mechanical/industrial engineer who writes task descriptions in English to practice. Check grammar, word choice and natural phrasing in a professional engineering register. Reply ONLY with strict JSON, no markdown:\n{"ok":boolean,"corrected":"corrected full text","notes":[{"issue":"short error category like 'article','verb tense','preposition','word choice','plural','word order'","why":"one-sentence rule explanation in English"}]}\nIf already correct: ok=true, corrected=same text, notes=[].`;
   try {
-    const out = await callClaude(sys, text);
+    const out = await callTutor(sys, text);
     const data = JSON.parse(out.replace(/```json|```/g, '').trim());
     if (data.notes && data.notes.length) { await logMistake(text, data.corrected, data.notes, taskId); toast(`📝 ${data.notes.length} English note${data.notes.length > 1 ? 's' : ''} logged — see Vocabulary`); if (current === 'vocab') renderVocab(); }
   } catch(e) {}
@@ -623,7 +636,7 @@ function renderEnStats() {
 function renderMistakes() {
   const el = document.getElementById('mistakesPanel'); if (!el) return;
   if (!mistakes.length) {
-    el.innerHTML = `<h3 class="en-h">⚠️ Your recurring mistakes</h3><div class="empty"><div>${hasApiKey() ? 'No corrections yet — create a task in English and the tutor will log what to fix here.' : 'Turn on the English tutor in Settings to auto-log your mistakes as you create tasks in English.'}</div></div>`;
+    el.innerHTML = `<h3 class="en-h">⚠️ Your recurring mistakes</h3><div class="empty"><div>${hasApiKey() ? 'No corrections yet — create a task in English and the tutor will log what to fix here.' : 'Add a Gemini API key in Settings to auto-log your mistakes as you create tasks in English.'}</div></div>`;
     return;
   }
   const counts = {}; mistakes.forEach(m => (m.errors || []).forEach(e => { (counts[e.type] = counts[e.type] || { n: 0, ex: e.explanation }).n++; }));
@@ -637,14 +650,14 @@ function renderMistakes() {
   const cb = document.getElementById('clearMiss'); if (cb) cb.onclick = async () => { if (await customConfirm('Clear all logged corrections?\nYour vocabulary deck stays.', { yes: 'Clear', no: 'Cancel', danger: true })) { mistakes = []; await sset('mistakes', mistakes); renderVocab(); toast('Corrections cleared'); } };
 }
 async function mineVocab() {
-  if (!hasApiKey()) { toast('Add an Anthropic API key in Settings to mine vocabulary'); return; }
+  if (!hasApiKey()) { toast('Add a Gemini or Claude API key in Settings to mine vocabulary'); return; }
   const corpus = tasks.map(t => `${t.title}. ${t.description}`).join('\n').trim();
   if (!corpus) { toast('Add some tasks in English first'); return; }
   const existing = vocab.map(v => v.term.toLowerCase());
   const btn = document.getElementById('mineBtn'); btn.innerHTML = `<span class="spin"></span> Mining…`; btn.disabled = true;
   const sys = `You extract technical English worth studying from task notes by a Brazilian mechanical/industrial engineer learning English. PRIORITIZE multi-word expressions and collocations engineers actually say (e.g. "lead time", "bill of materials", "tighten the tolerance", "sign-off from", "lead time with the supplier") over isolated single words — these teach how English is really built. Only include a single word if it's genuinely useful technical vocabulary. Skip trivial words. For each item give: the English expression/word, a natural Brazilian Portuguese translation, a short natural English example sentence, and kind ("expression" for multi-word collocations, "word" for single words). Reply ONLY strict JSON:\n{"terms":[{"term":"...","translation":"...","example":"...","kind":"expression|word"}]}\nMax 12 items, favoring expressions. Exclude already-known: ${existing.join(', ') || '(none)'}.`;
   try {
-    const out = await callClaude(sys, corpus, 1200);
+    const out = await callTutor(sys, corpus);
     const data = JSON.parse(out.replace(/```json|```/g, '').trim());
     let added = 0;
     (data.terms || []).forEach(tm => { if (!tm.term) return; if (vocab.some(v => v.term.toLowerCase() === tm.term.toLowerCase())) return; const card = { id: uid(), term: tm.term, translation: tm.translation || '', example: tm.example || '', kind: tm.kind === 'expression' ? 'expression' : 'word', status: 'new', addedAt: new Date().toISOString() }; srsInit(card); vocab.unshift(card); added++; });
@@ -1413,6 +1426,8 @@ function renderSettings() {
   };
   let storedToken = ''; try { storedToken = localStorage.getItem('polaris_gh_token') || ''; } catch(e) {}
   let storedKey = ''; try { storedKey = localStorage.getItem('polaris_api_key') || ''; } catch(e) {}
+  let storedGemini = ''; try { storedGemini = localStorage.getItem('polaris_gemini_key') || ''; } catch(e) {}
+  const tutorOn = storedGemini || storedKey;
   document.getElementById('settingsBody').innerHTML = `<div class="set-grid">
     <div class="set-panel"><h4>Your name</h4><div class="sd">Used in the "Good morning" greeting on Today.</div><div class="addline"><input id="set-name" value="${esc(settings.name || '')}" placeholder="Your name"><button class="btn sm primary" id="saveName">Save</button></div></div>
     ${listPanel('Activity types', 'e.g. Project document, Mechanical test, Supplier dealing.', 'types')}
@@ -1427,8 +1442,10 @@ function renderSettings() {
     <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn sm" id="syncNow">↑ Sync now</button><button class="btn sm" id="loadCloud">↓ Load from cloud</button></div>
   </div>
   <div class="set-panel" style="margin-top:14px">
-    <h4>🌐 English tutor — Claude API ${storedKey ? '<span style="color:var(--green);font-size:12px">● ON</span>' : '<span style="color:var(--txt-faint);font-size:12px">○ off</span>'}</h4>
-    <div class="sd">Optional. Paste an Anthropic API key to turn on automatic English correction when you save a task, and vocabulary mining. This is separate from your Claude Pro plan — it bills per use (a few cents a month). Leave empty to use the English Lab without AI. Get a key at console.anthropic.com.</div>
+    <h4>🌐 English tutor — AI correction ${tutorOn ? '<span style="color:var(--green);font-size:12px">● ON</span>' : '<span style="color:var(--txt-faint);font-size:12px">○ off</span>'}</h4>
+    <div class="sd">Paste a Gemini API key (recommended — free tier, 1500 req/day at aistudio.google.com) to enable automatic English correction and vocabulary mining. Stored only on this device, never synced to the cloud.</div>
+    <div class="addline" style="margin-bottom:10px"><input id="set-gemini" type="password" placeholder="Gemini API key  AIza…" value="${storedGemini}"><button class="btn sm primary" id="saveGemini">Save key</button></div>
+    <div class="sd" style="margin-top:6px">Or use an Anthropic Claude key as fallback:</div>
     <div class="addline" style="margin-bottom:6px"><input id="set-apikey" type="password" placeholder="Anthropic API key  sk-ant-…" value="${storedKey}"><button class="btn sm primary" id="saveApiKey">Save key</button></div>
   </div>
   <div class="set-panel" style="margin-top:14px">
@@ -1455,7 +1472,8 @@ function renderSettings() {
   document.getElementById('saveToken').onclick = () => { const v = document.getElementById('set-token').value.trim(); if (!v) { toast('Paste your GitHub token first'); return; } try { localStorage.setItem('polaris_gh_token', v); } catch(e) {} toast('Token saved ✓ — syncing…'); gistSave(); };
   document.getElementById('syncNow').onclick = () => gistSave();
   document.getElementById('loadCloud').onclick = async () => { const ok = await gistLoad(); if (ok) { tasks = lsGet('tasks') || tasks; vocab = lsGet('vocab') || vocab; ideas = lsGet('ideas') || ideas; mistakes = lsGet('mistakes') || mistakes; const s = lsGet('settings'); if (s) settings = { ...DEFAULTS, ...s }; refreshAll(); toast('Loaded from cloud ✓'); } else toast('Nothing loaded — check your token'); };
-  const saveKeyBtn = document.getElementById('saveApiKey'); if (saveKeyBtn) saveKeyBtn.onclick = () => { const v = document.getElementById('set-apikey').value.trim(); try { localStorage.setItem('polaris_api_key', v); } catch(e) {} toast(v ? 'API key saved ✓ — English tutor is ON' : 'API key cleared'); };
+  const saveGeminiBtn = document.getElementById('saveGemini'); if (saveGeminiBtn) saveGeminiBtn.onclick = () => { const v = document.getElementById('set-gemini').value.trim(); try { localStorage.setItem('polaris_gemini_key', v); } catch(e) {} toast(v ? 'Gemini key saved ✓ — English tutor is ON' : 'Gemini key cleared'); renderSettings(); };
+  const saveKeyBtn = document.getElementById('saveApiKey'); if (saveKeyBtn) saveKeyBtn.onclick = () => { const v = document.getElementById('set-apikey').value.trim(); try { localStorage.setItem('polaris_api_key', v); } catch(e) {} toast(v ? 'Claude API key saved ✓' : 'Claude API key cleared'); renderSettings(); };
 }
 
 // ── EXPORT / IMPORT ───────────────────────────────────────────────────────────
