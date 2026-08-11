@@ -1443,7 +1443,7 @@ function renderCalendar() {
     const kind = effKind(ds), ex = (settings.calendar || {})[ds], dayTasks = tasks.filter(t => t.deadline === ds);
     const isToday = ds === todayStr(), isSel = ds === calSel, weekend = kind === 'weekend', noWork = kind === 'holiday' || kind === 'bridge';
     const label = ex && ex.label ? ex.label : (noWork ? kind : '');
-    const taskHtml = dayTasks.slice(0, 3).map(t => `<div class="cal-task pl-${t.priority} ${t.status === 'done' ? 'done' : ''}">${esc(t.title)}</div>`).join('') + (dayTasks.length > 3 ? `<div class="cal-more">+${dayTasks.length - 3} more</div>` : '');
+    const taskHtml = dayTasks.map(t => `<div class="cal-task pl-${t.priority} ${t.status === 'done' ? 'done' : ''}">${esc(t.title)}</div>`).join('');
     cells += `<div class="cal-cell ${isToday ? 'today' : ''} ${isSel ? 'sel' : ''} ${noWork ? 'noWork' : ''} ${weekend ? 'weekend' : ''}" data-day="${ds}"><div class="cal-d"><span>${day}</span>${label ? `<span class="hl">${esc(label)}</span>` : ''}</div>${taskHtml}</div>`;
   }
   document.getElementById('calGrid').innerHTML = cells; renderDayPanel();
