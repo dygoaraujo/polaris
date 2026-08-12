@@ -133,7 +133,8 @@ button{font-family:inherit;cursor:pointer}input,textarea,select{font-family:inhe
 .frow:hover .chk{border-color:var(--green)}.frow.done .chk{background:var(--green);border-color:var(--green);color:#08160d}
 .frow .ftitle{flex:1;min-width:0;font-weight:600}.frow.done .ftitle{text-decoration:line-through}
 .frow .fmeta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px}
-.desc-ic{display:inline-flex;align-items:center;color:var(--txt-faint)}
+.desc-ic{display:inline-flex;align-items:center;color:var(--txt-dim)}
+.desc-ic svg{stroke-width:2.4}
 .kt .desc-ic{margin-left:6px;position:relative;top:1px}
 .cal-task .desc-ic{margin-left:4px;position:relative;top:1.5px}
 .star{border:0;background:transparent;font-size:17px;color:var(--txt-faint);flex:none;padding:2px;transition:.15s}.star.on{color:var(--accent)}.star:hover{transform:scale(1.15)}
