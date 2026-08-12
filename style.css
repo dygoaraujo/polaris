@@ -133,6 +133,9 @@ button{font-family:inherit;cursor:pointer}input,textarea,select{font-family:inhe
 .frow:hover .chk{border-color:var(--green)}.frow.done .chk{background:var(--green);border-color:var(--green);color:#08160d}
 .frow .ftitle{flex:1;min-width:0;font-weight:600}.frow.done .ftitle{text-decoration:line-through}
 .frow .fmeta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px}
+.desc-ic{display:inline-flex;align-items:center;color:var(--txt-faint)}
+.kt .desc-ic{margin-left:6px;position:relative;top:1px}
+.cal-task .desc-ic{margin-left:4px;position:relative;top:1.5px}
 .star{border:0;background:transparent;font-size:17px;color:var(--txt-faint);flex:none;padding:2px;transition:.15s}.star.on{color:var(--accent)}.star:hover{transform:scale(1.15)}
 .celebrate{text-align:center;padding:40px 20px;background:var(--green-soft);border:1px solid rgba(57,217,138,.25);border-radius:16px;margin-bottom:18px}.celebrate .big{font-family:var(--display);font-size:22px;color:var(--green)}
 
@@ -199,7 +202,7 @@ td .sub{font-size:11px;color:var(--txt-faint);margin-top:2px}
 input[type="date"]{color-scheme:dark}
 tr.addrow input,tr.addrow select{color-scheme:dark}
 .field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:#34456b;box-shadow:0 0 0 3px rgba(77,141,255,.1)}
-.field textarea{resize:vertical;min-height:60px;font-family:inherit}
+.field textarea{resize:vertical;min-height:60px;font-family:inherit;overflow:hidden}
 .prog-row{display:flex;align-items:center;gap:12px}.prog-row input[type=range]{flex:1;accent-color:var(--accent)}
 .subhead{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--txt-faint);border-top:1px solid var(--line-soft);padding-top:14px;display:flex;align-items:center;gap:8px}
 .contact{background:var(--panel-2);border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px;margin-bottom:8px}

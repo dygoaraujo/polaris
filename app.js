@@ -153,6 +153,7 @@ const fmtDate = s => { const d = parseDate(s); return d ? d.toLocaleDateString('
 const relDays = s => { const d = parseDate(s); return d ? Math.round((startOfDay(d) - today()) / DAY) : null; };
 function weekRange(o = 0) { const t = today(); const dow = t.getDay(); const mon = new Date(t.getTime() - ((dow + 6) % 7) * DAY + o * 7 * DAY); return [mon, new Date(mon.getTime() + 7 * DAY)]; }
 const esc = s => (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function autoGrow(el) { if (!el) return; const fit = () => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; }; el.addEventListener('input', fit); fit(); }
 const uniq = a => [...new Set(a)];
 const replyDue = t => Array.isArray(t.contacts) && t.contacts.some(c => c.ball === 'me');
 const PROD_PRIO_COLOR = { urgent: 'var(--red)', high: 'var(--amber)', medium: 'var(--blue)', low: 'var(--txt-faint)' };
@@ -225,6 +226,8 @@ function toggleFocus(id) {
 }
 
 // ── TODAY ─────────────────────────────────────────────────────────────────────
+const DESC_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+const descIcon = t => t.description ? `<span class="desc-ic" title="Has description">${DESC_SVG}</span>` : '';
 function frow(t) {
   const r = relDays(t.deadline);
   const due = (() => {
@@ -241,7 +244,7 @@ function frow(t) {
     <div class="chk" data-toggle-done="${t.id}">✓</div>
     <div class="prio-bar prio-${t.priority}" style="height:30px"></div>
     <div class="ftitle">${esc(t.title) || '<i style="color:var(--txt-faint)">untitled</i>'}
-      <div class="fmeta">${t.type ? `<span class="tag type">${esc(t.type)}</span>` : ''}${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}${t.sector ? `<span class="tag sec-tag">${esc(t.sector)}</span>` : ''}${t.priority ? `<span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span>` : ''}${sprintBadge(t)}${directiveBadge(t)}${replyBadge(t)}${due}</div>
+      <div class="fmeta">${descIcon(t)}${t.type ? `<span class="tag type">${esc(t.type)}</span>` : ''}${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}${t.sector ? `<span class="tag sec-tag">${esc(t.sector)}</span>` : ''}${t.priority ? `<span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span>` : ''}${sprintBadge(t)}${directiveBadge(t)}${replyBadge(t)}${due}</div>
     </div>
     <button class="star ${starred ? 'on' : ''}" data-star="${t.id}" title="Set as today's focus">${starred ? '★' : '☆'}</button>
   </div>`;
@@ -296,7 +299,7 @@ function renderBoardFilters() { document.getElementById('boardFilters').innerHTM
 function renderBoard() {
   renderBoardFilters();
   const cols = [['todo', 'To do'], ['in_progress', 'In progress'], ['blocked', 'Blocked'], ['done', 'Done']];
-  const card = t => `<div class="kcard pl-${t.priority}" draggable="true" data-card="${t.id}"><div class="kt">${esc(t.title) || 'untitled'}</div><div class="km">${t.deadline ? `<span class="due ${t.status !== 'done' && relDays(t.deadline) < 0 ? 'over' : (t.status !== 'done' && relDays(t.deadline) <= 2 ? 'soon' : '')}">${fmtDate(t.deadline)}</span>` : ''}${t.type ? `<span class="tag type">${esc(t.type)}</span>` : ''}${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}${t.sector ? `<span class="tag sec-tag">${esc(t.sector)}</span>` : ''}${t.priority ? `<span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span>` : ''}${sprintBadge(t)}${directiveBadge(t)}${replyBadge(t)}</div>${t.progress ? `<div class="kmini"><i style="width:${t.progress}%"></i></div>` : ''}</div>`;
+  const card = t => `<div class="kcard pl-${t.priority}" draggable="true" data-card="${t.id}"><div class="kt">${esc(t.title) || 'untitled'}${descIcon(t)}</div><div class="km">${t.deadline ? `<span class="due ${t.status !== 'done' && relDays(t.deadline) < 0 ? 'over' : (t.status !== 'done' && relDays(t.deadline) <= 2 ? 'soon' : '')}">${fmtDate(t.deadline)}</span>` : ''}${t.type ? `<span class="tag type">${esc(t.type)}</span>` : ''}${t.product ? `<span class="tag">${esc(t.product)}</span>` : ''}${t.sector ? `<span class="tag sec-tag">${esc(t.sector)}</span>` : ''}${t.priority ? `<span class="prio-tag prio-${t.priority}">${PRIOS[t.priority]}</span>` : ''}${sprintBadge(t)}${directiveBadge(t)}${replyBadge(t)}</div>${t.progress ? `<div class="kmini"><i style="width:${t.progress}%"></i></div>` : ''}</div>`;
   document.getElementById('board').innerHTML = cols.map(([k, label]) => {
     const items = tasks.filter(t => t.status === k && boardMatch(t) && matchSearch(t)).sort((a, b) => { const o = { urgent: 0, high: 1, medium: 2, low: 3 }; const ra = relDays(a.deadline), rb = relDays(b.deadline); if (ra !== rb) { if (ra === null) return 1; if (rb === null) return -1; return ra - rb; } return o[a.priority] - o[b.priority]; });
     const warn = k === 'in_progress' && items.length > 5 ? 'warn' : '';
@@ -480,6 +483,7 @@ function openModal(task) {
 
   const close = () => modalHost.innerHTML = '';
   scrim.onclick = close; mClose.onclick = close; mCancel.onclick = close;
+  document.querySelectorAll('#modalHost textarea').forEach(autoGrow);
   document.getElementById('f-prog').oninput = e => document.getElementById('pv').textContent = e.target.value;
   document.getElementById('f-prio').addEventListener('change', () => prioTouched = true);
   document.getElementById('f-status').addEventListener('change', e => {
@@ -1443,7 +1447,7 @@ function renderCalendar() {
     const kind = effKind(ds), ex = (settings.calendar || {})[ds], dayTasks = tasks.filter(t => t.deadline === ds);
     const isToday = ds === todayStr(), isSel = ds === calSel, weekend = kind === 'weekend', noWork = kind === 'holiday' || kind === 'bridge';
     const label = ex && ex.label ? ex.label : (noWork ? kind : '');
-    const taskHtml = dayTasks.map(t => `<div class="cal-task pl-${t.priority} ${t.status === 'done' ? 'done' : ''}">${esc(t.title)}</div>`).join('');
+    const taskHtml = dayTasks.map(t => `<div class="cal-task pl-${t.priority} ${t.status === 'done' ? 'done' : ''}">${esc(t.title)}${descIcon(t)}</div>`).join('');
     cells += `<div class="cal-cell ${isToday ? 'today' : ''} ${isSel ? 'sel' : ''} ${noWork ? 'noWork' : ''} ${weekend ? 'weekend' : ''}" data-day="${ds}"><div class="cal-d"><span>${day}</span>${label ? `<span class="hl">${esc(label)}</span>` : ''}</div>${taskHtml}</div>`;
   }
   document.getElementById('calGrid').innerHTML = cells; renderDayPanel();
