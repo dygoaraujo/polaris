@@ -132,7 +132,7 @@ function scheduleGistSave() { clearTimeout(gistTimer); gistTimer = setTimeout(gi
 
 // ── State ────────────────────────────────────────────────────────────────────
 let tasks = [], vocab = [], ideas = [], settings = {}, mistakes = [];
-let current = 'today', filter = 'all', boardFilters = [], dashPeriod = 'month', weekReportOffset = 0;
+let current = 'today', filters = [], boardFilters = [], dashPeriod = 'month', weekReportOffset = 0;
 let search = '', sortCol = 'createdAt', sortDir = -1, calY, calM, calSel = null;
 let addRowOpen = false;
 
@@ -208,6 +208,7 @@ function boardMatch(t) {
 }
 const matchSearch = t => !search || (t.title + ' ' + t.description + ' ' + t.requester + ' ' + t.product + ' ' + t.type + ' ' + t.sector + ' ' + t.source + ' ' + t.project).toLowerCase().includes(search.toLowerCase());
 const countFor = f => tasks.filter(t => matchesFilter(t, f) && matchSearch(t)).length;
+function matchesFilters(t, fs) { if (!fs.length) return true; return fs.some(f => matchesFilter(t, f)); }
 const FILTER_GROUPS = [
   [{ k: 'all', label: 'All' }],
   [{ k: 'todo', label: 'To do' }, { k: 'in_progress', label: 'In progress' }, { k: 'blocked', label: 'Blocked' }, { k: 'done', label: 'Done' }],
@@ -326,7 +327,7 @@ function renderFilters() {
   const isDeadlineSort = sortCol === 'deadline' && sortDir === 1;
   const isNewestSort = sortCol === 'createdAt' && sortDir === -1;
   document.getElementById('filters').innerHTML =
-    FILTER_GROUPS.map(g => g.map(f => `<button class="chip ${filter === f.k ? 'on' : ''} ${f.danger ? 'danger' : ''}" data-f="${f.k}">${f.label} <span class="n">${countFor(f.k)}</span></button>`).join('')).join('<span class="fdiv"></span>')
+    FILTER_GROUPS.map(g => g.map(f => `<button class="chip ${f.k === 'all' ? (!filters.length ? 'on' : '') : (filters.includes(f.k) ? 'on' : '')} ${f.danger ? 'danger' : ''}" data-f="${f.k}">${f.label} <span class="n">${countFor(f.k)}</span></button>`).join('')).join('<span class="fdiv"></span>')
     + `<span class="fdiv"></span><button class="chip ${isNewestSort ? 'on' : ''}" data-sq="createdAt:-1">🆕 Newest</button><button class="chip ${isDeadlineSort ? 'on' : ''}" data-sq="deadline:1">📅 Deadline ↑</button>`;
 }
 const COLS = [{ k: 'num', l: '#' }, { k: 'title', l: 'Task' }, { k: 'type', l: 'Type' }, { k: 'product', l: 'Product' }, { k: 'sector', l: 'Sector' }, { k: 'deadline', l: 'Deadline' }, { k: 'daysLeft', l: 'Days left' }, { k: 'completedAt', l: 'Completed' }, { k: 'priority', l: 'Priority' }, { k: 'progress', l: 'Progress' }, { k: 'status', l: 'Status' }, { k: 'createdAt', l: 'Created' }];
@@ -362,7 +363,7 @@ function commitAddRow() {
   toast('Activity added ✓');
 }
 function renderTable() {
-  let arr = tasks.filter(t => matchesFilter(t, filter) && matchSearch(t));
+  let arr = tasks.filter(t => matchesFilters(t, filters) && matchSearch(t));
   const po = { urgent: 0, high: 1, medium: 2, low: 3 }, so = { todo: 0, in_progress: 1, blocked: 2, done: 3 };
   arr.sort((a, b) => {
     // Done tasks always go to the bottom (except when sorting by status, createdAt or num)
@@ -1604,7 +1605,7 @@ function toast(m) { const el = document.getElementById('toast'); el.textContent 
 
 document.addEventListener('click', e => {
   const nav = e.target.closest('.nav-item'); if (nav) { show(nav.dataset.tab); return; }
-  const f = e.target.closest('[data-f]'); if (f) { filter = f.dataset.f; renderFilters(); renderTable(); return; }
+  const f = e.target.closest('[data-f]'); if (f) { const k = f.dataset.f; if (k === 'all') { filters = []; } else if (filters.includes(k)) { filters = filters.filter(x => x !== k); } else { filters.push(k); } renderFilters(); renderTable(); return; }
   const sq = e.target.closest('[data-sq]'); if (sq) { const [col, dir] = sq.dataset.sq.split(':'); sortCol = col; sortDir = parseInt(dir); renderFilters(); renderTable(); return; }
   const bf = e.target.closest('[data-bf]'); if (bf) { const k = bf.dataset.bf; if (k === 'all') { boardFilters = []; } else if (boardFilters.includes(k)) { boardFilters = boardFilters.filter(x => x !== k); } else { boardFilters.push(k); } renderBoard(); return; }
   const dp = e.target.closest('[data-dp]'); if (dp) { dashPeriod = dp.dataset.dp; weekReportOffset = 0; renderDashboard(); return; }
